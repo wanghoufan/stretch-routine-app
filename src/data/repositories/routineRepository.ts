@@ -8,6 +8,7 @@ import {
   SPEAK_TEXT_MAX_LENGTH,
 } from '../../domain/routine/constants';
 import { totalDurationSec } from '../../domain/routine/duration';
+import { joinTagList, normalizeDifficulty, type TagFields } from '../../domain/tags';
 import type { SqlDatabase } from '../db/Database';
 import {
   rowToRoutine,
@@ -31,7 +32,7 @@ export interface RoutineStepInput {
   side?: StepSide;
 }
 
-export interface RoutineInput {
+export interface RoutineInput extends TagFields {
   name: string;
   defaultDurationSec: number;
   defaultTransitionSec: number;
@@ -191,6 +192,9 @@ export function createRoutineRepository(deps: RoutineRepositoryDeps): RoutineRep
         name,
         defaultDurationSec: clampDuration(input.defaultDurationSec),
         defaultTransitionSec: clampTransition(input.defaultTransitionSec),
+        category: input.category,
+        difficulty: normalizeDifficulty(input.difficulty),
+        bodypart: input.bodypart,
         createdAt: now,
         updatedAt: now,
       };
@@ -199,13 +203,16 @@ export function createRoutineRepository(deps: RoutineRepositoryDeps): RoutineRep
         await db.transaction(async () => {
           await db.run(
             `INSERT INTO routines
-               (id, name, default_duration_sec, default_transition_sec, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+               (id, name, default_duration_sec, default_transition_sec, category, difficulty, bodypart, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               routine.id,
               routine.name,
               routine.defaultDurationSec,
               routine.defaultTransitionSec,
+              joinTagList(routine.category),
+              routine.difficulty ?? null,
+              joinTagList(routine.bodypart),
               routine.createdAt,
               routine.updatedAt,
             ],
@@ -239,12 +246,16 @@ export function createRoutineRepository(deps: RoutineRepositoryDeps): RoutineRep
         await db.transaction(async () => {
           await db.run(
             `UPDATE routines
-                SET name = ?, default_duration_sec = ?, default_transition_sec = ?, updated_at = ?
+                SET name = ?, default_duration_sec = ?, default_transition_sec = ?,
+                    category = ?, difficulty = ?, bodypart = ?, updated_at = ?
               WHERE id = ?`,
             [
               name,
               clampDuration(input.defaultDurationSec),
               clampTransition(input.defaultTransitionSec),
+              joinTagList(input.category ?? existing.category),
+              normalizeDifficulty(input.difficulty ?? existing.difficulty) ?? null,
+              joinTagList(input.bodypart ?? existing.bodypart),
               updatedAt,
               id,
             ],

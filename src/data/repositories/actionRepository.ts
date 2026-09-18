@@ -4,6 +4,7 @@ import {
   ROUTINE_NAME_MAX_LENGTH,
   SPEAK_TEXT_MAX_LENGTH,
 } from '../../domain/routine/constants';
+import { joinTagList, normalizeDifficulty } from '../../domain/tags';
 import type { SqlDatabase } from '../db/Database';
 import { rowToAction, type ActionRow } from '../mappers/actionMapper';
 import type { WallClock } from '../../services/clock';
@@ -63,6 +64,9 @@ export function createActionRepository(deps: ActionRepositoryDeps): ActionReposi
         defaultDurationSec: clampDuration(draft.defaultDurationSec),
         sideMode: draft.sideMode === 'bilateral' ? 'bilateral' : 'single',
         defaultSpeakText: normalizeSpeakText(draft.defaultSpeakText) ?? undefined,
+        category: draft.category,
+        difficulty: normalizeDifficulty(draft.difficulty),
+        bodypart: draft.bodypart,
         createdAt: now,
         updatedAt: now,
       };
@@ -70,14 +74,17 @@ export function createActionRepository(deps: ActionRepositoryDeps): ActionReposi
       try {
         await db.run(
           `INSERT INTO actions
-             (id, name, default_duration_sec, side_mode, default_speak_text, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             (id, name, default_duration_sec, side_mode, default_speak_text, category, difficulty, bodypart, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             action.id,
             action.name,
             action.defaultDurationSec,
             action.sideMode,
             action.defaultSpeakText ?? null,
+            joinTagList(action.category),
+            action.difficulty ?? null,
+            joinTagList(action.bodypart),
             action.createdAt,
             action.updatedAt,
           ],
@@ -107,19 +114,29 @@ export function createActionRepository(deps: ActionRepositoryDeps): ActionReposi
           patch.defaultSpeakText === undefined
             ? existing.defaultSpeakText
             : normalizeSpeakText(patch.defaultSpeakText) ?? undefined,
+        category: patch.category === undefined ? existing.category : patch.category,
+        difficulty:
+          patch.difficulty === undefined
+            ? existing.difficulty
+            : normalizeDifficulty(patch.difficulty),
+        bodypart: patch.bodypart === undefined ? existing.bodypart : patch.bodypart,
         updatedAt: new Date(clock.nowMs()).toISOString(),
       };
 
       try {
         await db.run(
           `UPDATE actions
-              SET name = ?, default_duration_sec = ?, side_mode = ?, default_speak_text = ?, updated_at = ?
+              SET name = ?, default_duration_sec = ?, side_mode = ?, default_speak_text = ?,
+                  category = ?, difficulty = ?, bodypart = ?, updated_at = ?
             WHERE id = ?`,
           [
             updated.name,
             updated.defaultDurationSec,
             updated.sideMode,
             updated.defaultSpeakText ?? null,
+            joinTagList(updated.category),
+            updated.difficulty ?? null,
+            joinTagList(updated.bodypart),
             updated.updatedAt,
             updated.id,
           ],

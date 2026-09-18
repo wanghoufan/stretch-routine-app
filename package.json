@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "expo": "~57.0.23",
+    "expo-audio": "~57.0.5",
     "expo-speech": "~57.0.3",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",

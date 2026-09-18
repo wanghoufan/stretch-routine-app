@@ -1,5 +1,6 @@
 import type { Routine } from '../../domain/routine/Routine';
 import type { RoutineStep, StepSide } from '../../domain/routine/RoutineStep';
+import { normalizeDifficulty, splitTagList, type TagFields } from '../../domain/tags';
 
 /** Row shape of the `routines` table. */
 export interface RoutineRow {
@@ -9,6 +10,9 @@ export interface RoutineRow {
   default_transition_sec: number;
   created_at: string;
   updated_at: string;
+  category: string | null;
+  difficulty: string | null;
+  bodypart: string | null;
 }
 
 /** Row shape of the `routine_steps` table. */
@@ -40,6 +44,16 @@ export function rowToRoutine(row: RoutineRow): Routine {
     defaultTransitionSec: row.default_transition_sec,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...rowToRoutineTags(row),
+  };
+}
+
+/** Tag fields decoded from the comma-separated columns. */
+export function rowToRoutineTags(row: Pick<RoutineRow, 'category' | 'difficulty' | 'bodypart'>): TagFields {
+  return {
+    category: splitTagList(row.category),
+    difficulty: normalizeDifficulty(row.difficulty),
+    bodypart: splitTagList(row.bodypart),
   };
 }
 

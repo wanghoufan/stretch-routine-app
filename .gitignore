@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# 本地构建产物（APK存releases/，CNG原生目录）：体积大，不进仓
+releases/
+android/

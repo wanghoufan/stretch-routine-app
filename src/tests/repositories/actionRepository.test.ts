@@ -69,6 +69,35 @@ describe('action repository', () => {
     db.close();
   });
 
+  it('persists 场景/难度/部位 tags and updates them', async () => {
+    const { db, actions } = setup();
+    await runMigrations(db);
+
+    const created = await actions.create({
+      name: '门框扩胸',
+      defaultDurationSec: 30,
+      sideMode: 'single',
+      category: ['胸', '办公'],
+      difficulty: '中',
+      bodypart: ['胸', '肩'],
+    });
+
+    const loaded = await actions.getById(created.id);
+    expect(loaded?.category).toEqual(['胸', '办公']);
+    expect(loaded?.difficulty).toBe('中');
+    expect(loaded?.bodypart).toEqual(['胸', '肩']);
+
+    const updated = await actions.update(created.id, { difficulty: '高', bodypart: ['胸'] });
+    expect(updated.category).toEqual(['胸', '办公']);
+    expect(updated.difficulty).toBe('高');
+    expect((await actions.getById(created.id))?.bodypart).toEqual(['胸']);
+
+    // An untagged action stays untagged.
+    const plain = await actions.create({ name: '无标签', defaultDurationSec: 30, sideMode: 'single' });
+    expect((await actions.getById(plain.id))?.difficulty).toBeUndefined();
+    db.close();
+  });
+
   it('keeps existing routine snapshots intact when an action is deleted (T079/FR-015)', async () => {
     const { db, actions, routines } = setup();
     await runMigrations(db);

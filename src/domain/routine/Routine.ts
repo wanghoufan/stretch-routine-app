@@ -1,6 +1,8 @@
 /** Domain: Routine (SPEC §7, PLAN §4). */
 
-export interface Routine {
+import type { TagFields } from '../tags';
+
+export interface Routine extends TagFields {
   id: string;
   name: string;
   defaultDurationSec: number;

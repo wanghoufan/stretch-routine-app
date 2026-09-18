@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { RoutineSummary } from '../../../domain/routine/Routine';
 import { formatDuration } from '../../../shared/utils/format';
-import { colors, spacing } from '../../../shared/theme';
+import { colors, radius, spacing } from '../../../shared/theme';
 import { AppButton } from '../../../shared/components/AppButton';
 
 /**
@@ -14,20 +14,35 @@ export function RoutineCard({
   hasActiveSession,
   onOpen,
   onStart,
+  badge,
 }: {
   summary: RoutineSummary;
   hasActiveSession: boolean;
   onOpen: () => void;
   onStart: () => void;
+  /** Optional 角标, e.g. the 低/中/高 difficulty on 核心 templates (TASK-014). */
+  badge?: string;
 }) {
   const meta = `${summary.stepCount} 个动作 · 约 ${formatDuration(summary.totalDurationSec)}`;
 
   return (
     <View style={styles.card}>
       <View style={styles.info}>
-        <Text style={styles.name} maxFontSizeMultiplier={1.5} accessibilityRole="header">
-          {summary.name}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.name} maxFontSizeMultiplier={1.5} accessibilityRole="header">
+            {summary.name}
+          </Text>
+          {badge ? (
+            <Text
+              style={styles.badge}
+              maxFontSizeMultiplier={1.4}
+              testID={`routine-badge-${summary.id}`}
+              accessibilityLabel={`难度${badge}`}
+            >
+              {badge}
+            </Text>
+          ) : null}
+        </View>
         <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
           {meta}
         </Text>
@@ -68,10 +83,25 @@ const styles = StyleSheet.create({
   info: {
     marginBottom: spacing.md,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   name: {
+    flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
+  },
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    backgroundColor: colors.accentSoft,
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   meta: {
     marginTop: spacing.xs,

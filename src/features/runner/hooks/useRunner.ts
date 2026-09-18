@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { useServices } from '../../../app/providers/ServicesContext';
 import { useSettings } from '../../../app/providers/SettingsContext';
 import { useSpeech } from '../../../app/providers/SpeechContext';
+import { useAmbientPlayer } from '../../../app/providers/AmbientContext';
+import { AmbientAudioService } from '../../../services/audio/ambientAudioService';
 import {
   createAppStateVisibilitySource,
   type AppVisibilitySource,
@@ -37,6 +39,7 @@ export function useRunner(options: UseRunnerOptions = {}): UseRunnerResult {
   const services = useServices();
   const { settings } = useSettings();
   const { tts } = useSpeech();
+  const ambientPlayer = useAmbientPlayer();
 
   const visibilitySource = useMemo(
     () => options.visibilitySource ?? createAppStateVisibilitySource(),
@@ -51,15 +54,17 @@ export function useRunner(options: UseRunnerOptions = {}): UseRunnerResult {
       repository: services.sessions,
       wallClock: services.wallClock,
     });
+    const ambient = new AmbientAudioService({ player: ambientPlayer });
     return new RunnerController({
       persistence,
       monotonic: services.monotonic,
       bootInfo: services.bootInfo,
       termination: services.termination,
       tts,
+      ambient,
       settings: settingsRef.current,
     });
-  }, [services, tts]);
+  }, [services, tts, ambientPlayer]);
 
   useEffect(() => {
     void controller.load();

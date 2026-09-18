@@ -28,6 +28,7 @@ describe('settings persistence (T082)', () => {
       countdownWarningSec: 8,
       defaultDurationSec: 45,
       defaultTransitionSec: 10,
+      ambientSound: 'night',
     });
 
     const reloaded = await settings.load();
@@ -38,7 +39,28 @@ describe('settings persistence (T082)', () => {
       countdownWarningSec: 8,
       defaultDurationSec: 45,
       defaultTransitionSec: 10,
+      ambientSound: 'night',
     });
+    db.close();
+  });
+
+  it('defaults the countdown background sound to tick (TASK-011)', async () => {
+    const { db, settings } = await setup();
+    expect((await settings.load()).ambientSound).toBe('tick');
+
+    await settings.save({ ...DEFAULT_SETTINGS, ambientSound: 'silent' });
+    expect((await settings.load()).ambientSound).toBe('silent');
+    db.close();
+  });
+
+  it('falls back to tick for an unknown stored background sound', async () => {
+    const { db, settings } = await setup();
+    await db.run('INSERT INTO app_settings (key, value) VALUES (?, ?)', [
+      'ambientSound',
+      'thunderstorm',
+    ]);
+
+    expect((await settings.load()).ambientSound).toBe('tick');
     db.close();
   });
 
@@ -83,5 +105,21 @@ describe('settings normalisation', () => {
 
   it('rounds the speech rate to one decimal place', () => {
     expect(normalizeSettings({ speechRate: 1.234 }).speechRate).toBe(1.2);
+  });
+
+  it('normalises the background sound option', () => {
+    expect(normalizeSettings({ ambientSound: 'ethereal' }).ambientSound).toBe('ethereal');
+    expect(normalizeSettings({ ambientSound: 'nope' as never }).ambientSound).toBe('tick');
+    expect(normalizeSettings({}).ambientSound).toBe('tick');
+  });
+
+  it('rewrites stored rain/waves/forest values to tick (TASK-016 forward compatibility)', async () => {
+    for (const legacy of ['rain', 'waves', 'forest'] as const) {
+      const { db, settings } = await setup();
+      await db.run('INSERT INTO app_settings (key, value) VALUES (?, ?)', ['ambientSound', legacy]);
+
+      expect((await settings.load()).ambientSound).toBe('tick');
+      db.close();
+    }
   });
 });

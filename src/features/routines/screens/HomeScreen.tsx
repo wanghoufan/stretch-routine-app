@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '../../../app/navigation/NavigationContext';
 import { useServices } from '../../../app/providers/ServicesContext';
@@ -13,6 +13,7 @@ import { ActiveSessionBanner } from '../../runner/components/ActiveSessionBanner
 import { StartConflictPrompt } from '../../runner/components/StartConflictPrompt';
 import { useStartRoutine } from '../../runner/hooks/useStartRoutine';
 import { RoutineCard } from '../components/RoutineCard';
+import { groupRoutines } from '../services/routineGroups';
 import { useRoutines } from '../hooks/useRoutines';
 
 /**
@@ -28,6 +29,7 @@ export function HomeScreen() {
   const { tts } = useSpeech();
   const { settings } = useSettings();
   const { routines, activeSession, loading, error, refresh } = useRoutines(services);
+  const routineGroups = useMemo(() => groupRoutines(routines), [routines]);
 
   const openRunner = useCallback(() => navigation.navigate('Runner', undefined), [navigation]);
   const startFlow = useStartRoutine(services, tts, settings, openRunner);
@@ -129,14 +131,22 @@ export function HomeScreen() {
       ) : (
         <View>
           <SectionTitle>共 {routines.length} 个流程</SectionTitle>
-          {routines.map((summary) => (
-            <RoutineCard
-              key={summary.id}
-              summary={summary}
-              hasActiveSession={activeSession?.routineId === summary.id}
-              onOpen={() => openRoutine(summary.id)}
-              onStart={() => startRoutine(summary.id)}
-            />
+          {routineGroups.map((group) => (
+            <View key={group.key} testID={group.key}>
+              <SectionTitle>
+                {group.scene}（{group.count}）
+              </SectionTitle>
+              {group.routines.map((summary) => (
+                <RoutineCard
+                  key={summary.id}
+                  summary={summary}
+                  hasActiveSession={activeSession?.routineId === summary.id}
+                  onOpen={() => openRoutine(summary.id)}
+                  onStart={() => startRoutine(summary.id)}
+                  badge={group.scene === '核心' ? summary.difficulty : undefined}
+                />
+              ))}
+            </View>
           ))}
         </View>
       )}

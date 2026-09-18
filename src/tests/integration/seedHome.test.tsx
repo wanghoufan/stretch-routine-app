@@ -26,11 +26,24 @@ describe('seed library on Home (TASK-005)', () => {
 
     renderApp({ services: context.services, speaker: createTestSpeaker() });
 
-    expect(await screen.findByText('共 2 个流程')).toBeTruthy();
+    expect(await screen.findByText('共 9 个流程')).toBeTruthy();
     expect(screen.getByText('晨起全身拉伸')).toBeTruthy();
     expect(screen.getByText('跑后下肢放松')).toBeTruthy();
-    expect(screen.getByText('10 个动作 · 约 5分45秒')).toBeTruthy();
-    expect(screen.getByText('9 个动作 · 约 5分10秒')).toBeTruthy();
+    expect(screen.getByText('办公室久坐放松')).toBeTruthy();
+    expect(screen.getByText('睡前全身放松')).toBeTruthy();
+    expect(screen.getByText('5分钟快速热身')).toBeTruthy();
+    expect(screen.getByText('久坐办公族拉伸')).toBeTruthy();
+    expect(screen.getByText('初级核心')).toBeTruthy();
+    expect(screen.getByText('中级核心')).toBeTruthy();
+    expect(screen.getByText('高级核心')).toBeTruthy();
+    expect(screen.queryByText('办公室肩颈放松')).toBeNull();
+    expect(screen.getAllByText('10 个动作 · 约 5分45秒')).toHaveLength(2);
+    expect(screen.getAllByText('9 个动作 · 约 5分10秒')).toHaveLength(2);
+    expect(screen.getByText('21 个动作 · 约 12分10秒')).toBeTruthy();
+    expect(screen.getByText('20 个动作 · 约 11分35秒')).toBeTruthy();
+    expect(screen.getByText('3 个动作 · 约 3分')).toBeTruthy();
+    expect(screen.getByText('5 个动作 · 约 4分30秒')).toBeTruthy();
+    expect(screen.getByText('5 个动作 · 约 3分50秒')).toBeTruthy();
     expect(screen.queryByText('还没有流程')).toBeNull();
 
     context.dispose();

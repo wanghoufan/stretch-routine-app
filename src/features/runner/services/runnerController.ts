@@ -6,6 +6,7 @@ import type { MonotonicClock } from '../../../services/clock';
 import type { BootInfoProvider } from '../../../services/runtime/BootInfo';
 import type { ProcessTerminationProvider } from '../../../services/runtime/Termination';
 import { TtsService, type Cue } from '../../../services/tts/ttsService';
+import type { AmbientAudioService } from '../../../services/audio/ambientAudioService';
 import {
   advanceRunner,
   applyRunnerControl,
@@ -48,6 +49,8 @@ export interface RunnerControllerDeps {
   bootInfo: BootInfoProvider;
   termination: ProcessTerminationProvider;
   tts: TtsService;
+  /** Countdown background loop, reconciled from the runner state (TASK-011). */
+  ambient: AmbientAudioService;
   settings: AppSettings;
 }
 
@@ -86,6 +89,9 @@ export class RunnerController {
 
   setSettings(settings: AppSettings): void {
     this.deps.settings = settings;
+    // "Switch takes effect immediately": reconcile the loop right away, even
+    // between ticks, so a settings change is audible at once.
+    this.syncAmbient();
   }
 
   /** Load the stored active session and resume it if it is safe to do so. */
@@ -193,6 +199,7 @@ export class RunnerController {
 
   dispose(): void {
     this.disposed = true;
+    this.deps.ambient.dispose();
     this.listeners.clear();
   }
 
@@ -231,8 +238,20 @@ export class RunnerController {
   private patch(partial: Partial<RunnerSnapshot>): void {
     const next = { ...this.snapshot, ...partial };
     this.snapshot = next;
+    this.syncAmbient();
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  /**
+   * Drive the background loop from the authoritative state. Idempotent, so it
+   * is safe to call on every tick as well as on state/settings changes.
+   */
+  private syncAmbient(): void {
+    this.deps.ambient.sync(
+      this.snapshot.session?.state ?? null,
+      this.deps.settings.ambientSound,
+    );
   }
 }

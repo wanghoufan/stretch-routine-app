@@ -4,6 +4,11 @@ import {
   DEFAULT_STEP_DURATION_SEC,
   DEFAULT_TRANSITION_SEC,
 } from '../../domain/routine/constants';
+import {
+  DEFAULT_AMBIENT_SOUND,
+  normalizeAmbientSound,
+  type AmbientSoundOption,
+} from './ambientSound';
 
 /**
  * Minimal V1 settings (SPEC US7).
@@ -23,6 +28,8 @@ export interface AppSettings {
   defaultDurationSec: number;
   /** Default transition applied to new routines/steps. */
   defaultTransitionSec: number;
+  /** Global countdown background loop (TASK-011); `silent` plays nothing. */
+  ambientSound: AmbientSoundOption;
 }
 
 export const SPEECH_RATE_MIN = 0.5;
@@ -38,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   countdownWarningSec: 5,
   defaultDurationSec: DEFAULT_STEP_DURATION_SEC,
   defaultTransitionSec: DEFAULT_TRANSITION_SEC,
+  ambientSound: DEFAULT_AMBIENT_SOUND,
 };
 
 function clampNumber(value: number, min: number, max: number, fallback: number): number {
@@ -64,6 +72,7 @@ export function normalizeSettings(input: Partial<AppSettings> = {}): AppSettings
     ),
     defaultDurationSec: clampDuration(input.defaultDurationSec ?? DEFAULT_SETTINGS.defaultDurationSec),
     defaultTransitionSec: clampTransition(input.defaultTransitionSec ?? DEFAULT_SETTINGS.defaultTransitionSec),
+    ambientSound: normalizeAmbientSound(input.ambientSound),
   };
 }
 
@@ -76,6 +85,7 @@ export function settingsToRecord(settings: AppSettings): Record<string, string> 
     countdownWarningSec: String(settings.countdownWarningSec),
     defaultDurationSec: String(settings.defaultDurationSec),
     defaultTransitionSec: String(settings.defaultTransitionSec),
+    ambientSound: settings.ambientSound,
   };
 }
 
@@ -124,5 +134,7 @@ export function settingsFromRecord(record: Record<string, string>): AppSettings 
   if (defaultTransitionSec !== undefined) {
     partial.defaultTransitionSec = defaultTransitionSec;
   }
+  // `normalizeAmbientSound` already falls back for unknown / missing values.
+  partial.ambientSound = normalizeAmbientSound(record.ambientSound);
   return normalizeSettings(partial);
 }

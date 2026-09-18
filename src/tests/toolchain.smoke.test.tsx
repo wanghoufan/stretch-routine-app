@@ -21,4 +21,21 @@ describe('toolchain smoke test', () => {
     );
     expect(screen.getByText('你好')).toBeTruthy();
   });
+
+  it('bundles the ambient loops as assets (TASK-011)', () => {
+    // `require` of a WAV returns an asset module under Metro; Jest maps it to a
+    // stub (see jest.config.js). Either way the import must resolve.
+    const tick = require('../assets/audio/tick.wav') as number | { uri?: string };
+    expect(tick).toBeDefined();
+
+    // `expo-audio` is only reached lazily inside the adapter, so importing the
+    // module (and building the port) must not touch native audio.
+    const { createExpoAudioAmbientPlayer } = require('../services/audio/expoAudioAmbientPlayer') as typeof import('../services/audio/expoAudioAmbientPlayer');
+    const player = createExpoAudioAmbientPlayer();
+    expect(typeof player.play).toBe('function');
+    expect(typeof player.stop).toBe('function');
+
+    // Creating the adapter does not create a native player: only `play()` does.
+    expect(() => player.stop()).not.toThrow();
+  });
 });

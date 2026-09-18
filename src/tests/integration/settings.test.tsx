@@ -1,15 +1,23 @@
+import { Alert } from 'react-native';
 import { fireEvent, screen } from '@testing-library/react-native';
 import { act } from '@testing-library/react-native';
+import { runSeeds } from '../../data/seeds';
 import { renderApp } from '../support/renderApp';
 import { createTestContext } from '../support/testContext';
 import { createTestSpeaker } from '../support/fixtures';
 import { advanceTime, press, type as typeText } from '../support/interaction';
+
+type AlertButton = { text?: string; style?: string; onPress?: () => void };
 
 /**
  * US7 independent test (T083, T086): change a setting, restart the app, and
  * confirm it persists and affects new playback/defaults.
  */
 describe('US7 设置 (T083/T084/T086)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   async function toggle(testID: string, value: boolean) {
     await act(async () => {
       fireEvent(screen.getByTestId(testID), 'valueChange', value);
@@ -162,6 +170,46 @@ describe('US7 设置 (T083/T084/T086)', () => {
 
     expect(speaker.spoken).toEqual(['A，30秒', '4秒后结束']);
 
+    context.dispose();
+  });
+
+  it('clears seeded examples after confirmation and keeps user content (TASK-010)', async () => {
+    const context = await createTestContext();
+    await runSeeds({
+      db: context.db,
+      clock: context.clock,
+      generateId: context.services.generateId,
+    });
+    const ownAction = await context.services.actions.create({
+      name: '我的动作',
+      defaultDurationSec: 45,
+      sideMode: 'single',
+    });
+
+    const spy = jest.spyOn(Alert, 'alert') as unknown as jest.SpyInstance<
+      void,
+      [string, string?, AlertButton[]?]
+    >;
+    spy.mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+    });
+
+    renderApp({
+      services: context.services,
+      speaker: createTestSpeaker(),
+      initialRoute: { name: 'Settings', params: undefined },
+    });
+
+    await screen.findByText('示例数据');
+    await press('settings-clear-examples');
+
+    expect(await screen.findByText(/已清除 9 个示例流程、59 个示例动作/)).toBeTruthy();
+    expect(await context.services.routines.list()).toHaveLength(0);
+    const remaining = await context.services.actions.list();
+    expect(remaining.map((action) => action.name)).toEqual(['我的动作']);
+    expect((await context.services.actions.getById(ownAction.id))?.name).toBe('我的动作');
+
+    jest.restoreAllMocks();
     context.dispose();
   });
 });

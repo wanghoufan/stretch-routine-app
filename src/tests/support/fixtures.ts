@@ -2,6 +2,8 @@ import type { RoutineStep } from '../../domain/routine/RoutineStep';
 import type { RoutineStepDraft } from '../../domain/routine/RoutineStep';
 import { createSequentialIdGenerator } from '../../shared/utils/id';
 import type { TtsSpeaker } from '../../services/tts/ttsService';
+import type { AmbientPlayer } from '../../services/audio/ambientAudioService';
+import type { AmbientSoundOption } from '../../features/settings/ambientSound';
 
 /** Build ordered routine steps from a compact table. */
 export function makeSteps(
@@ -58,4 +60,30 @@ export function createTestSpeaker(options: { autoFinish?: boolean } = {}): Recor
     },
   };
   return speaker;
+}
+
+export interface RecordingAmbientPlayer extends AmbientPlayer {
+  /** Every `play` call, in order, with the volume it was given. */
+  played: { option: AmbientSoundOption; volume: number }[];
+  stopCount: number;
+  disposed: boolean;
+}
+
+/** Ambient loop double: records calls, creates no player, touches no native audio. */
+export function createTestAmbientPlayer(): RecordingAmbientPlayer {
+  const player: RecordingAmbientPlayer = {
+    played: [],
+    stopCount: 0,
+    disposed: false,
+    play(option, options) {
+      player.played.push({ option, volume: options.volume });
+    },
+    stop() {
+      player.stopCount += 1;
+    },
+    dispose() {
+      player.disposed = true;
+    },
+  };
+  return player;
 }

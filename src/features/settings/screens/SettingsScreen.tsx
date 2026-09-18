@@ -1,10 +1,14 @@
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useNavigation } from '../../../app/navigation/NavigationContext';
+import { useServices } from '../../../app/providers/ServicesContext';
 import { useSettings } from '../../../app/providers/SettingsContext';
+import { clearSeededExamples } from '../../../data/seeds';
+import { AppButton } from '../../../shared/components/AppButton';
 import { Card, SectionTitle } from '../../../shared/components/Layout';
 import { NoticeBanner } from '../../../shared/components/NoticeBanner';
 import { Screen } from '../../../shared/components/Screen';
-import { StepperField } from '../../../shared/components/Fields';
+import { RadioGroupField, StepperField } from '../../../shared/components/Fields';
 import { colors, fontSizes, spacing } from '../../../shared/theme';
 import {
   COUNTDOWN_WARNING_MAX_SEC,
@@ -13,6 +17,11 @@ import {
   SPEECH_RATE_MIN,
   SPEECH_RATE_STEP,
 } from '../settingsModel';
+import {
+  AMBIENT_SOUND_META,
+  AMBIENT_SOUND_OPTIONS,
+  ambientSoundTestId,
+} from '../ambientSound';
 import { DURATION_MAX_SEC, DURATION_MIN_SEC, TRANSITION_MAX_SEC, TRANSITION_MIN_SEC } from '../../../domain/routine/constants';
 
 /**
@@ -23,11 +32,58 @@ import { DURATION_MAX_SEC, DURATION_MIN_SEC, TRANSITION_MAX_SEC, TRANSITION_MIN_
  */
 export function SettingsScreen() {
   const navigation = useNavigation();
+  const services = useServices();
   const { settings, loading, update } = useSettings();
+  const [clearing, setClearing] = useState(false);
+  const [clearResult, setClearResult] = useState<string | null>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
+
+  const runClear = useCallback(async () => {
+    setClearing(true);
+    setClearResult(null);
+    setClearError(null);
+    try {
+      const result = await clearSeededExamples({
+        db: services.db,
+        clock: services.wallClock,
+        generateId: services.generateId,
+      });
+      const total = result.removedRoutineNames.length + result.removedActionNames.length;
+      setClearResult(
+        total === 0
+          ? '没有找到可清除的示例数据。'
+          : `已清除 ${result.removedRoutineNames.length} 个示例流程、${result.removedActionNames.length} 个示例动作。`,
+      );
+    } catch (clearFailure) {
+      setClearError(clearFailure instanceof Error ? clearFailure.message : '清除示例数据失败');
+    } finally {
+      setClearing(false);
+    }
+  }, [services]);
+
+  const confirmClear = useCallback(() => {
+    Alert.alert(
+      '清除示例数据',
+      '将删除预置的示例流程和示例动作。你自己创建或改名过的内容不会受影响，且清除后不会再自动出现。此操作不可撤销。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '清除',
+          style: 'destructive',
+          onPress: () => {
+            void runClear();
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  }, [runClear]);
 
   return (
     <Screen title="设置" onBack={navigation.goBack}>
       {loading ? <NoticeBanner title="正在读取设置…" /> : null}
+      {clearResult ? <NoticeBanner title={clearResult} /> : null}
+      {clearError ? <NoticeBanner tone="error" title="清除示例数据失败" message={clearError} /> : null}
 
       <SectionTitle>语音</SectionTitle>
       <Card>
@@ -85,6 +141,22 @@ export function SettingsScreen() {
           step={1}
           testID="settings-countdown-sec"
         />
+
+        <RadioGroupField
+          label="倒计时背景音"
+          value={settings.ambientSound}
+          onChange={(value) => {
+            void update({ ambientSound: value });
+          }}
+          options={AMBIENT_SOUND_OPTIONS.map((option) => ({
+            value: option,
+            label: AMBIENT_SOUND_META[option].label,
+            description: AMBIENT_SOUND_META[option].description,
+            testID: ambientSoundTestId(option),
+          }))}
+          testID="settings-ambient-group"
+          hint="只在动作/过渡倒计时中循环播放，暂停或结束立即停止；语音播报时同时保留。"
+        />
       </Card>
 
       <SectionTitle>新流程默认值</SectionTitle>
@@ -116,6 +188,22 @@ export function SettingsScreen() {
         </Text>
       </Card>
 
+      <SectionTitle>示例数据</SectionTitle>
+      <Card>
+        <Text style={styles.hint} maxFontSizeMultiplier={1.5}>
+          预置的示例流程和示例动作可以一键清除。你自己创建或改名过的内容不会受影响；清除后示例不会自动回来。
+        </Text>
+        <AppButton
+          label="清除示例数据"
+          variant="danger"
+          onPress={confirmClear}
+          disabled={clearing}
+          accessibilityHint="删除预置的示例流程和示例动作，需要二次确认"
+          testID="settings-clear-examples"
+          style={styles.clearButton}
+        />
+      </Card>
+
       <SectionTitle>关于</SectionTitle>
       <Card>
         <Text style={styles.about} maxFontSizeMultiplier={1.5}>
@@ -143,6 +231,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     lineHeight: 19,
+  },
+  clearButton: {
+    marginTop: spacing.md,
   },
   about: {
     fontSize: fontSizes.meta,

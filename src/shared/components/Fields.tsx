@@ -50,6 +50,81 @@ export function TextField({
   );
 }
 
+export interface RadioOption<T extends string> {
+  value: T;
+  label: string;
+  description?: string;
+  testID?: string;
+}
+
+/**
+ * Vertical single-choice radio group (TASK-011).
+ *
+ * Used for the countdown background sound. Each row is a radio for screen
+ * readers, carries the Chinese label, and exposes a stable `testID`.
+ */
+export function RadioGroupField<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  testID,
+  hint,
+}: {
+  label: string;
+  value: T;
+  options: readonly RadioOption<T>[];
+  onChange: (next: T) => void;
+  testID?: string;
+  hint?: string;
+}) {
+  return (
+    <View style={styles.radioGroup} testID={testID} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <Text style={styles.label} maxFontSizeMultiplier={1.5}>
+        {label}
+      </Text>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            testID={option.testID}
+            onPress={() => onChange(option.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            accessibilityHint={option.description}
+            style={({ pressed }) => [
+              styles.radioRow,
+              selected ? styles.radioSelected : null,
+              pressed ? styles.radioPressed : null,
+            ]}
+          >
+            <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
+              {selected ? <View style={styles.radioInner} /> : null}
+            </View>
+            <View style={styles.radioText}>
+              <Text style={styles.radioLabel} maxFontSizeMultiplier={1.5}>
+                {option.label}
+              </Text>
+              {option.description ? (
+                <Text style={styles.radioDescription} maxFontSizeMultiplier={1.5}>
+                  {option.description}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
+      {hint ? (
+        <Text style={styles.hint} maxFontSizeMultiplier={1.5}>
+          {hint}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function StepperField({
   label,
   value,
@@ -204,5 +279,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+  },
+  radioGroup: {
+    paddingVertical: spacing.sm,
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: MIN_TOUCH_SIZE,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    gap: spacing.md,
+  },
+  radioSelected: {
+    backgroundColor: colors.accentSoft,
+  },
+  radioPressed: {
+    opacity: 0.75,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: colors.primary,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+  radioText: {
+    flex: 1,
+  },
+  radioLabel: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  radioDescription: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 });

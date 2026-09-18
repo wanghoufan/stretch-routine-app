@@ -33,6 +33,43 @@ describe('routine repository', () => {
     db.close();
   });
 
+  it('persists 场景/难度/部位 tags on a routine', async () => {
+    const { db, routines } = setup();
+    await runMigrations(db);
+
+    const created = await routines.create({
+      name: '晨间拉伸',
+      defaultDurationSec: 30,
+      defaultTransitionSec: 5,
+      category: ['晨起'],
+      difficulty: '低',
+      bodypart: ['全身', '背'],
+      steps: [{ displayName: 'A', durationSec: 30, transitionSec: 5 }],
+    });
+
+    const loaded = await routines.getById(created.routine.id);
+    expect(loaded?.category).toEqual(['晨起']);
+    expect(loaded?.difficulty).toBe('低');
+    expect(loaded?.bodypart).toEqual(['全身', '背']);
+
+    const [summary] = await routines.listSummaries();
+    expect(summary?.category).toEqual(['晨起']);
+    expect(summary?.difficulty).toBe('低');
+
+    const updated = await routines.update(created.routine.id, {
+      name: '晨间拉伸',
+      defaultDurationSec: 30,
+      defaultTransitionSec: 5,
+      difficulty: '中',
+      steps: [{ displayName: 'A', durationSec: 30, transitionSec: 5 }],
+    });
+    // A UI edit that knows nothing about tags must not erase them.
+    expect(updated.routine.category).toEqual(['晨起']);
+    expect(updated.routine.difficulty).toBe('中');
+    expect(updated.routine.bodypart).toEqual(['全身', '背']);
+    db.close();
+  });
+
   it('reports step count and approximate total duration on Home', async () => {
     const { db, routines } = setup();
     await runMigrations(db);

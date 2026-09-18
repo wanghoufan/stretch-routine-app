@@ -110,6 +110,25 @@ export const MIGRATIONS: readonly Migration[] = [
       )`,
     ],
   },
+  {
+    version: 3,
+    name: 'action_routine_tags',
+    /**
+     * TASK-012: tag Actions and Routines with 场景 / 难度 / 部位.
+     *
+     * Purely additive: `ALTER TABLE ... ADD COLUMN` never rewrites a row, so
+     * every existing Action/Routine/Step keeps its data. The tag columns are
+     * nullable TEXT; multi-value fields use comma-separated values.
+     */
+    statements: [
+      'ALTER TABLE actions ADD COLUMN category TEXT',
+      'ALTER TABLE actions ADD COLUMN difficulty TEXT',
+      'ALTER TABLE actions ADD COLUMN bodypart TEXT',
+      'ALTER TABLE routines ADD COLUMN category TEXT',
+      'ALTER TABLE routines ADD COLUMN difficulty TEXT',
+      'ALTER TABLE routines ADD COLUMN bodypart TEXT',
+    ],
+  },
 ];
 
 /** Highest schema version this build knows how to produce. */
