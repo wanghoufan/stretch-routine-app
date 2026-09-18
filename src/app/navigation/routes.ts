@@ -1,0 +1,40 @@
+/**
+ * Route table for the small in-app stack.
+ *
+ * V1 has seven screens and no deep linking, so a typed `useState` stack is
+ * enough — no navigation framework is introduced (Constitution §3.1).
+ */
+
+export interface RouteParamsMap {
+  Home: undefined;
+  RoutineDetail: { routineId: string };
+  RoutineEditor: { routineId?: string };
+  Runner: { routineId: string };
+  Completion: {
+    routineId: string;
+    routineName: string;
+    stepCount: number;
+    elapsedMs: number;
+  };
+  ActionLibrary: undefined;
+  Settings: undefined;
+}
+
+export type RouteName = keyof RouteParamsMap;
+
+export type Route = {
+  [K in RouteName]: { name: K; params: RouteParamsMap[K] };
+}[RouteName];
+
+export const HOME_ROUTE: Route = { name: 'Home', params: undefined };
+
+/** Screen headers use one Chinese title per route. */
+export const ROUTE_TITLES: Record<RouteName, string> = {
+  Home: '我的流程',
+  RoutineDetail: '流程详情',
+  RoutineEditor: '编辑流程',
+  Runner: '进行中',
+  Completion: '完成',
+  ActionLibrary: '动作库',
+  Settings: '设置',
+};
