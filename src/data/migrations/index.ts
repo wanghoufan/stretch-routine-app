@@ -72,6 +72,44 @@ export const MIGRATIONS: readonly Migration[] = [
       )`,
     ],
   },
+  {
+    version: 2,
+    name: 'active_session_v2_monotonic_snapshot',
+    /**
+     * R010: rebuild ONLY the transient `active_session` table.
+     *
+     * `active_session` is disposable runtime state: V1 rows carry wall-clock
+     * epochs that V2 deliberately stops trusting, and there is no way to
+     * translate them into the new monotonic origin (`bootCount`/elapsed ms).
+     * Dropping and recreating it therefore loses nothing the user owns.
+     *
+     * User-owned tables — `actions`, `routines`, `routine_steps`,
+     * `app_settings` — are NOT touched by this migration.
+     */
+    statements: [
+      'DROP TABLE IF EXISTS active_session',
+      `CREATE TABLE active_session (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        session_id TEXT NOT NULL,
+        routine_id TEXT NOT NULL,
+        routine_name TEXT NOT NULL,
+        state TEXT NOT NULL,
+        current_step_index INTEGER NOT NULL,
+        phase_started_elapsed_ms INTEGER,
+        paused_at_elapsed_ms INTEGER,
+        accumulated_pause_ms INTEGER NOT NULL,
+        effective_step_duration_ms INTEGER NOT NULL,
+        effective_transition_duration_ms INTEGER NOT NULL,
+        runtime_extension_ms INTEGER NOT NULL,
+        completed_phase_ms INTEGER NOT NULL,
+        last_updated_elapsed_ms INTEGER NOT NULL,
+        updated_at_wall_ms INTEGER NOT NULL,
+        boot_count INTEGER NOT NULL,
+        snapshot_version INTEGER NOT NULL,
+        snapshot TEXT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 /** Highest schema version this build knows how to produce. */

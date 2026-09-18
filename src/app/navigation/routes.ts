@@ -3,13 +3,17 @@
  *
  * V1 has seven screens and no deep linking, so a typed `useState` stack is
  * enough — no navigation framework is introduced (Constitution §3.1).
+ *
+ * `Runner` deliberately takes no params (R019): it is driven entirely by the
+ * stored ActiveSession, so it can continue even after the source Routine was
+ * renamed or deleted.
  */
 
 export interface RouteParamsMap {
   Home: undefined;
   RoutineDetail: { routineId: string };
   RoutineEditor: { routineId?: string };
-  Runner: { routineId: string };
+  Runner: undefined;
   Completion: {
     routineId: string;
     routineName: string;

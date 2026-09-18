@@ -1,5 +1,4 @@
 import { isPaused } from '../../../domain/session/RunnerState';
-import type { Routine } from '../../../domain/routine/Routine';
 import type { RoutineStep } from '../../../domain/routine/RoutineStep';
 import type { RunnerSnapshot } from './runnerController';
 import {
@@ -15,9 +14,12 @@ import {
 /** Everything the Runner screen needs, derived from an immutable snapshot. */
 export interface RunnerView {
   status: RunnerSnapshot['status'];
-  routine: Routine | null;
+  /** Provenance id (may reference a deleted routine). */
+  routineId: string | null;
+  /** Name captured in the session snapshot; survives source rename/delete. */
+  routineName: string | null;
   steps: readonly RoutineStep[];
-  nowMs: number;
+  nowElapsedMs: number;
   errorMessage: string | null;
 
   currentStep: RoutineStep | undefined;
@@ -45,12 +47,13 @@ export interface RunnerView {
 }
 
 export function deriveRunnerView(snapshot: RunnerSnapshot): RunnerView {
-  const { session, steps, nowMs } = snapshot;
+  const { session, steps, nowElapsedMs } = snapshot;
   const empty: RunnerView = {
     status: snapshot.status,
-    routine: snapshot.routine,
+    routineId: session?.routineId ?? null,
+    routineName: snapshot.routineName,
     steps,
-    nowMs,
+    nowElapsedMs,
     errorMessage: snapshot.errorMessage,
     currentStep: undefined,
     nextStep: undefined,
@@ -84,9 +87,9 @@ export function deriveRunnerView(snapshot: RunnerSnapshot): RunnerView {
     nextStep: upcomingStep(steps, session),
     transitionTarget: isTransition ? steps[session.currentStepIndex] : undefined,
     finishedStep: isTransition ? previousStep(steps, session) : undefined,
-    remainingMs: remainingMs(session, nowMs),
-    elapsedMs: routineElapsedMs(session, nowMs),
-    progress: routineProgress(session, steps, nowMs),
+    remainingMs: remainingMs(session, nowElapsedMs),
+    elapsedMs: routineElapsedMs(session, nowElapsedMs),
+    progress: routineProgress(session, steps, nowElapsedMs),
     isPaused: isPaused(session.state),
     isTransition,
     canGoPrevious: session.currentStepIndex > 0,

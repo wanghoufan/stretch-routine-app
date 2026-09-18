@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useRoute } from '../../../app/navigation/NavigationContext';
+import { useNavigation } from '../../../app/navigation/NavigationContext';
 import { useSpeech } from '../../../app/providers/SpeechContext';
 import { formatClock, formatDuration } from '../../../shared/utils/format';
 import { Card } from '../../../shared/components/Layout';
@@ -17,10 +17,9 @@ import { useRunner } from '../hooks/useRunner';
  * presentation of timestamp-derived state (Constitution §3.3).
  */
 export function RunnerScreen() {
-  const { routineId } = useRoute('Runner');
   const navigation = useNavigation();
   const { ttsError, dismissTtsError } = useSpeech();
-  const { view, togglePause, addTime, previous, skip, end } = useRunner({ routineId });
+  const { view, togglePause, addTime, previous, skip, end } = useRunner({});
 
   const navigatedRef = useRef<'idle' | 'completed' | 'stopped'>('idle');
 
@@ -28,11 +27,11 @@ export function RunnerScreen() {
     if (navigatedRef.current !== 'idle') {
       return;
     }
-    if (view.isFinished && view.routine) {
+    if (view.isFinished && view.routineName) {
       navigatedRef.current = 'completed';
       navigation.replace('Completion', {
-        routineId,
-        routineName: view.routine.name,
+        routineId: view.routineId ?? '',
+        routineName: view.routineName,
         stepCount: view.stepCount,
         elapsedMs: view.elapsedMs,
       });
@@ -42,7 +41,15 @@ export function RunnerScreen() {
       navigatedRef.current = 'stopped';
       navigation.reset('Home', undefined);
     }
-  }, [view.isFinished, view.isStopped, view.routine, view.stepCount, view.elapsedMs, navigation, routineId]);
+  }, [
+    view.isFinished,
+    view.isStopped,
+    view.routineId,
+    view.routineName,
+    view.stepCount,
+    view.elapsedMs,
+    navigation,
+  ]);
 
   const confirmEnd = () => {
     Alert.alert('结束流程', '确定要结束当前流程吗？已经完成的部分不会保存。', [
@@ -66,8 +73,8 @@ export function RunnerScreen() {
       <Screen title="进行中" onBack={navigation.goBack}>
         <NoticeBanner
           tone="error"
-          title="无法开始流程"
-          message={view.errorMessage ?? '流程不存在'}
+          title="无法继续流程"
+          message={view.errorMessage ?? '没有进行中的流程'}
           actionLabel="返回"
           onAction={() => navigation.reset('Home', undefined)}
         />
@@ -80,7 +87,7 @@ export function RunnerScreen() {
   const speakPreview = isTransition ? view.transitionTarget?.speakText : view.currentStep?.speakText;
 
   return (
-    <Screen title={view.routine?.name ?? '进行中'} onBack={confirmEnd} scroll={false}>
+    <Screen title={view.routineName ?? '进行中'} onBack={confirmEnd} scroll={false}>
       {ttsError ? (
         <NoticeBanner
           tone="warning"

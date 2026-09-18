@@ -10,4 +10,11 @@ export {
   isTerminal,
   togglePauseState,
 } from './RunnerState';
-export type { ActiveSession, ActiveSessionInput } from './ActiveSession';
+export type { ActiveSession } from './ActiveSession';
+export type { ActiveSessionSnapshot, SnapshotDecodeResult } from './SessionSnapshot';
+export {
+  ACTIVE_SESSION_SNAPSHOT_VERSION,
+  createSnapshot,
+  decodeSnapshot,
+  encodeSnapshot,
+} from './SessionSnapshot';

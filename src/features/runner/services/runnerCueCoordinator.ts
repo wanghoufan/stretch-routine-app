@@ -19,7 +19,8 @@ export interface CuePlanInput {
   steps: readonly RoutineStep[];
   events: readonly RunnerEvent[];
   settings: AppSettings;
-  nowMs: number;
+  /** Monotonic elapsed ms (`MonotonicClock`). */
+  nowElapsedMs: number;
 }
 
 /**
@@ -97,7 +98,7 @@ export function buildCues(input: CuePlanInput): Cue[] {
  * warning again for the new, longer step instead of staying silent.
  */
 function buildCountdownWarningCue(input: CuePlanInput): Cue | null {
-  const { session, steps, settings, events, nowMs } = input;
+  const { session, steps, settings, events, nowElapsedMs } = input;
 
   if (!settings.countdownWarningEnabled) {
     return null;
@@ -122,13 +123,13 @@ function buildCountdownWarningCue(input: CuePlanInput): Cue | null {
     return null;
   }
 
-  const left = remainingMs(session, nowMs);
+  const left = remainingMs(session, nowElapsedMs);
   if (left <= 0 || left > warningMs) {
     return null;
   }
 
   return {
     key: `warn:${session.sessionId}:${session.currentStepIndex}:${session.effectiveStepDurationMs}`,
-    text: `${remainingSec(session, nowMs)}秒后结束`,
+    text: `${remainingSec(session, nowElapsedMs)}秒后结束`,
   };
 }

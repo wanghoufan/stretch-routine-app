@@ -1,5 +1,5 @@
 import { createRoutineRepository } from '../../data/repositories/routineRepository';
-import { FakeClock } from '../../services/clock/Clock';
+import { FakeClock } from '../../services/clock';
 import { runMigrations } from '../../data/migrations';
 import { createSequentialIdGenerator } from '../../shared/utils/id';
 import { createNodeSqlDatabase, type NodeSqlDatabase } from '../support/nodeSqlDatabase';

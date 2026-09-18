@@ -14,17 +14,18 @@ import { totalDurationSec } from '../../../domain/routine/duration';
 /**
  * Elapsed time inside the current phase.
  *
- * While paused the reference is `pausedAtEpochMs`, so effective elapsed time
- * freezes no matter how much real time passes.
+ * `nowElapsedMs` is **monotonic** elapsed time (`MonotonicClock`), not a wall
+ * timestamp. While paused the reference is `pausedAtElapsedMs`, so effective
+ * elapsed time freezes no matter how much real time passes.
  */
-export function phaseElapsedMs(session: ActiveSession, nowMs: number): number {
-  if (session.phaseStartedAtEpochMs === null) {
+export function phaseElapsedMs(session: ActiveSession, nowElapsedMs: number): number {
+  if (session.phaseStartedElapsedMs === null) {
     return 0;
   }
-  const referenceNow = isPaused(session.state) && session.pausedAtEpochMs !== null
-    ? session.pausedAtEpochMs
-    : nowMs;
-  const elapsed = referenceNow - session.phaseStartedAtEpochMs - session.accumulatedPauseMs;
+  const referenceNow = isPaused(session.state) && session.pausedAtElapsedMs !== null
+    ? session.pausedAtElapsedMs
+    : nowElapsedMs;
+  const elapsed = referenceNow - session.phaseStartedElapsedMs - session.accumulatedPauseMs;
   return Math.max(0, elapsed);
 }
 
@@ -43,18 +44,18 @@ export function phaseTotalMs(session: ActiveSession): number {
 }
 
 /** Remaining time in the current phase; never negative. */
-export function remainingMs(session: ActiveSession, nowMs: number): number {
-  return Math.max(0, phaseTotalMs(session) - phaseElapsedMs(session, nowMs));
+export function remainingMs(session: ActiveSession, nowElapsedMs: number): number {
+  return Math.max(0, phaseTotalMs(session) - phaseElapsedMs(session, nowElapsedMs));
 }
 
 /** Remaining time rounded up to whole seconds, for display and cue decisions. */
-export function remainingSec(session: ActiveSession, nowMs: number): number {
-  return Math.ceil(remainingMs(session, nowMs) / 1000);
+export function remainingSec(session: ActiveSession, nowElapsedMs: number): number {
+  return Math.ceil(remainingMs(session, nowElapsedMs) / 1000);
 }
 
 /** Routine time already completed, including the part of the current phase. */
-export function routineElapsedMs(session: ActiveSession, nowMs: number): number {
-  return session.completedPhaseMs + phaseElapsedMs(session, nowMs);
+export function routineElapsedMs(session: ActiveSession, nowElapsedMs: number): number {
+  return session.completedPhaseMs + phaseElapsedMs(session, nowElapsedMs);
 }
 
 /** Planned routine length in ms, from saved values (runtime +10 excluded). */
@@ -63,12 +64,16 @@ export function routineTotalMs(steps: readonly RoutineStep[]): number {
 }
 
 /** 0..1 progress used by the runner progress bar. */
-export function routineProgress(session: ActiveSession, steps: readonly RoutineStep[], nowMs: number): number {
+export function routineProgress(
+  session: ActiveSession,
+  steps: readonly RoutineStep[],
+  nowElapsedMs: number,
+): number {
   const total = routineTotalMs(steps);
   if (total <= 0) {
     return 0;
   }
-  return Math.min(1, Math.max(0, routineElapsedMs(session, nowMs) / total));
+  return Math.min(1, Math.max(0, routineElapsedMs(session, nowElapsedMs) / total));
 }
 
 /** Step the runner is currently on (or heading into, during a transition). */

@@ -6,7 +6,7 @@ import {
 } from '../../domain/routine/constants';
 import type { SqlDatabase } from '../db/Database';
 import { rowToAction, type ActionRow } from '../mappers/actionMapper';
-import type { Clock } from '../../services/clock/Clock';
+import type { WallClock } from '../../services/clock';
 import { generateId, type IdGenerator } from '../../shared/utils/id';
 import { PersistenceError, ValidationError } from '../../shared/errors';
 
@@ -20,7 +20,8 @@ export interface ActionRepository {
 
 export interface ActionRepositoryDeps {
   db: SqlDatabase;
-  clock: Clock;
+  /** Real-world timestamps only (`createdAt` / `updatedAt`), never runner timing. */
+  clock: WallClock;
   generateId?: IdGenerator;
 }
 

@@ -15,7 +15,7 @@ import {
   type RoutineRow,
   type RoutineStepRow,
 } from '../mappers/routineMapper';
-import type { Clock } from '../../services/clock/Clock';
+import type { WallClock } from '../../services/clock';
 import { generateId, type IdGenerator } from '../../shared/utils/id';
 import { PersistenceError, ValidationError } from '../../shared/errors';
 
@@ -56,7 +56,8 @@ export interface RoutineRepository {
 
 export interface RoutineRepositoryDeps {
   db: SqlDatabase;
-  clock: Clock;
+  /** Real-world timestamps only (`createdAt` / `updatedAt`), never runner timing. */
+  clock: WallClock;
   generateId?: IdGenerator;
 }
 

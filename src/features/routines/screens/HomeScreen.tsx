@@ -2,22 +2,35 @@ import { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '../../../app/navigation/NavigationContext';
 import { useServices } from '../../../app/providers/ServicesContext';
+import { useSettings } from '../../../app/providers/SettingsContext';
+import { useSpeech } from '../../../app/providers/SpeechContext';
 import { AppButton } from '../../../shared/components/AppButton';
-import { EmptyState, SectionTitle } from '../../../shared/components/Layout';import { NoticeBanner } from '../../../shared/components/NoticeBanner';
+import { EmptyState, SectionTitle } from '../../../shared/components/Layout';
+import { NoticeBanner } from '../../../shared/components/NoticeBanner';
 import { Screen } from '../../../shared/components/Screen';
 import { spacing } from '../../../shared/theme';
+import { ActiveSessionBanner } from '../../runner/components/ActiveSessionBanner';
+import { StartConflictPrompt } from '../../runner/components/StartConflictPrompt';
+import { useStartRoutine } from '../../runner/hooks/useStartRoutine';
 import { RoutineCard } from '../components/RoutineCard';
 import { useRoutines } from '../hooks/useRoutines';
 
 /**
- * Home / 我的流程 (T034, FR-001).
+ * Home / 我的流程 (T034, FR-001, R020).
  *
  * The primary hands-free entry point: open the app, tap 开始, put the phone down.
+ * A running session is surfaced as a Banner so it can be continued even if its
+ * source routine was deleted, and starting a second routine asks first.
  */
 export function HomeScreen() {
   const navigation = useNavigation();
   const services = useServices();
-  const { routines, activeSessionRoutineId, loading, error, refresh } = useRoutines(services);
+  const { tts } = useSpeech();
+  const { settings } = useSettings();
+  const { routines, activeSession, loading, error, refresh } = useRoutines(services);
+
+  const openRunner = useCallback(() => navigation.navigate('Runner', undefined), [navigation]);
+  const startFlow = useStartRoutine(services, tts, settings, openRunner);
 
   const openRoutine = useCallback(
     (routineId: string) => navigation.navigate('RoutineDetail', { routineId }),
@@ -25,9 +38,15 @@ export function HomeScreen() {
   );
 
   const startRoutine = useCallback(
-    (routineId: string) => navigation.navigate('Runner', { routineId }),
-    [navigation],
+    (routineId: string) => {
+      void startFlow.start(routineId);
+    },
+    [startFlow],
   );
+
+  const continueSession = useCallback(() => {
+    void startFlow.resume();
+  }, [startFlow]);
 
   return (
     <Screen
@@ -61,6 +80,38 @@ export function HomeScreen() {
         />
       ) : null}
 
+      {startFlow.state.status === 'error' ? (
+        <NoticeBanner
+          tone="error"
+          title="无法开始流程"
+          message={startFlow.state.message}
+          actionLabel="知道了"
+          onAction={startFlow.dismissError}
+        />
+      ) : null}
+
+      {startFlow.state.status === 'conflict' ? (
+        <StartConflictPrompt
+          currentRoutineName={startFlow.state.currentRoutineName}
+          onContinue={() => {
+            void startFlow.continueCurrent();
+          }}
+          onReplace={() => {
+            void startFlow.replaceCurrent();
+          }}
+          onCancel={startFlow.cancel}
+          busy={false}
+        />
+      ) : null}
+
+      {activeSession ? (
+        <ActiveSessionBanner
+          session={activeSession}
+          onContinue={continueSession}
+          busy={startFlow.state.status === 'busy'}
+        />
+      ) : null}
+
       <AppButton
         label="新建流程"
         onPress={() => navigation.navigate('RoutineEditor', {})}
@@ -82,7 +133,7 @@ export function HomeScreen() {
             <RoutineCard
               key={summary.id}
               summary={summary}
-              hasActiveSession={activeSessionRoutineId === summary.id}
+              hasActiveSession={activeSession?.routineId === summary.id}
               onOpen={() => openRoutine(summary.id)}
               onStart={() => startRoutine(summary.id)}
             />

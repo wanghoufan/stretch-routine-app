@@ -10,7 +10,7 @@ import {
   STEP_NAME_MAX_LENGTH,
   SPEAK_TEXT_MAX_LENGTH,
 } from '../domain/routine/constants';
-import { SystemClock, type Clock } from '../services/clock/Clock';
+import { SystemWallClock, type WallClock } from '../services/clock';
 import { generateId, type IdGenerator } from '../shared/utils/id';
 import type { SqlDatabase } from './db/Database';
 
@@ -85,15 +85,30 @@ export const SEED_ROUTINES: readonly SeedRoutineDefinition[] = [
 /** `seeded` = rows written now; the other two are no-op outcomes. */
 export type SeedOutcome = 'seeded' | 'already-seeded' | 'skipped-user-data';
 
+/**
+ * Result of the seed repair pass (TASK-009).
+ *
+ * `not-applicable` = this install never recorded seeding (fresh or user-owned),
+ * so repairing is not our business. `intact` = the marker is set and every
+ * shipped routine is still present. `repaired` = one or more shipped routines
+ * had gone missing and were re-created, leaving everything else untouched.
+ */
+export interface SeedRepairResult {
+  outcome: 'repaired' | 'intact' | 'not-applicable';
+  /** Names of the shipped routines re-created by this pass, in catalog order. */
+  restoredRoutineNames: string[];
+}
+
 export interface SeedDependencies {
   db: SqlDatabase;
-  clock?: Clock;
+  /** Real-world timestamps only; seeds never participate in runner timing. */
+  clock?: WallClock;
   generateId?: IdGenerator;
 }
 
 interface SeedStepRow {
   id: string;
-  sourceActionId: string;
+  sourceActionId: string | null;
   displayName: string;
   speakText: string;
   durationSec: number;
@@ -109,7 +124,7 @@ interface SeedStepRow {
  */
 function buildSteps(
   definition: SeedActionDefinition,
-  actionId: string,
+  actionId: string | null,
   nextId: IdGenerator,
 ): SeedStepRow[] {
   const durationSec = clampDuration(DEFAULT_STEP_DURATION_SEC);
@@ -120,7 +135,7 @@ function buildSteps(
   if (definition.sideMode === 'bilateral') {
     const pairGroupId = nextId('pair');
     return createBilateralStepDrafts(
-      { id: actionId, name, defaultDurationSec: durationSec, defaultSpeakText: speakText },
+      { id: actionId ?? '', name, defaultDurationSec: durationSec, defaultSpeakText: speakText },
       { transitionSec, fallbackDurationSec: durationSec, generateId: nextId, pairGroupId },
     ).map((draft) => ({
       id: draft.id,
@@ -160,6 +175,74 @@ async function countRows(db: SqlDatabase, table: 'actions' | 'routines'): Promis
   return row?.count ?? 0;
 }
 
+const SEED_ACTION_BY_KEY = new Map(SEED_ACTIONS.map((definition) => [definition.key, definition]));
+
+/**
+ * Insert one shipped routine plus its step snapshot. Shared by the initial seed
+ * and the TASK-009 repair pass so a restored routine is byte-for-byte the same
+ * shape as the one a fresh install gets.
+ *
+ * `resolveActionId` may return `null` when the referenced library Action is
+ * gone (the user deleted it); `routine_steps.source_action_id` is nullable and
+ * the step keeps its own snapshot values, so playback still works.
+ */
+async function insertSeedRoutine(
+  db: SqlDatabase,
+  routine: SeedRoutineDefinition,
+  resolveActionId: (key: string) => string | null,
+  timestamp: string,
+  nextId: IdGenerator,
+): Promise<void> {
+  const durationSec = clampDuration(DEFAULT_STEP_DURATION_SEC);
+  const transitionSec = clampTransition(DEFAULT_TRANSITION_SEC);
+  const routineId = nextId('rtn');
+
+  await db.run(
+    `INSERT INTO routines
+       (id, name, default_duration_sec, default_transition_sec, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      routineId,
+      routine.name.trim().slice(0, ROUTINE_NAME_MAX_LENGTH),
+      durationSec,
+      transitionSec,
+      timestamp,
+      timestamp,
+    ],
+  );
+
+  const steps = routine.actionKeys.flatMap((key) => {
+    const definition = SEED_ACTION_BY_KEY.get(key);
+    if (!definition) {
+      // Only reachable if the catalog itself is inconsistent; fail the
+      // transaction rather than silently saving an incomplete routine.
+      throw new Error(`种子数据缺少动作定义：${key}`);
+    }
+    return buildSteps(definition, resolveActionId(key), nextId);
+  });
+
+  for (const [index, step] of steps.entries()) {
+    await db.run(
+      `INSERT INTO routine_steps
+         (id, routine_id, source_action_id, order_index, display_name, speak_text,
+          duration_sec, transition_sec, pair_group_id, side)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        step.id,
+        routineId,
+        step.sourceActionId,
+        index,
+        step.displayName,
+        step.speakText,
+        step.durationSec,
+        step.transitionSec,
+        step.pairGroupId,
+        step.side,
+      ],
+    );
+  }
+}
+
 /**
  * Seed once, atomically. Order of checks matters:
  *
@@ -172,7 +255,7 @@ async function countRows(db: SqlDatabase, table: 'actions' | 'routines'): Promis
  */
 export async function runSeeds(deps: SeedDependencies): Promise<SeedOutcome> {
   const { db } = deps;
-  const clock = deps.clock ?? new SystemClock();
+  const clock = deps.clock ?? new SystemWallClock();
   const nextId = deps.generateId ?? generateId;
 
   if (await hasSeedMarker(db)) {
@@ -189,17 +272,14 @@ export async function runSeeds(deps: SeedDependencies): Promise<SeedOutcome> {
 
   const now = new Date(clock.nowMs()).toISOString();
   const durationSec = clampDuration(DEFAULT_STEP_DURATION_SEC);
-  const transitionSec = clampTransition(DEFAULT_TRANSITION_SEC);
 
   await db.transaction(async () => {
     const actionIdByKey = new Map<string, string>();
-    const definitionByKey = new Map<string, SeedActionDefinition>();
 
     for (const definition of SEED_ACTIONS) {
       const id = nextId('act');
       const name = definition.name.trim().slice(0, ROUTINE_NAME_MAX_LENGTH);
       actionIdByKey.set(definition.key, id);
-      definitionByKey.set(definition.key, definition);
       await db.run(
         `INSERT INTO actions
            (id, name, default_duration_sec, side_mode, default_speak_text, created_at, updated_at)
@@ -209,52 +289,7 @@ export async function runSeeds(deps: SeedDependencies): Promise<SeedOutcome> {
     }
 
     for (const routine of SEED_ROUTINES) {
-      const routineId = nextId('rtn');
-      await db.run(
-        `INSERT INTO routines
-           (id, name, default_duration_sec, default_transition_sec, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          routineId,
-          routine.name.trim().slice(0, ROUTINE_NAME_MAX_LENGTH),
-          durationSec,
-          transitionSec,
-          now,
-          now,
-        ],
-      );
-
-      const steps = routine.actionKeys.flatMap((key) => {
-        const definition = definitionByKey.get(key);
-        const actionId = actionIdByKey.get(key);
-        if (!definition || !actionId) {
-          // Only reachable if the catalog itself is inconsistent; fail the
-          // transaction rather than silently saving an incomplete routine.
-          throw new Error(`种子数据缺少动作定义：${key}`);
-        }
-        return buildSteps(definition, actionId, nextId);
-      });
-
-      for (const [index, step] of steps.entries()) {
-        await db.run(
-          `INSERT INTO routine_steps
-             (id, routine_id, source_action_id, order_index, display_name, speak_text,
-              duration_sec, transition_sec, pair_group_id, side)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            step.id,
-            routineId,
-            step.sourceActionId,
-            index,
-            step.displayName,
-            step.speakText,
-            step.durationSec,
-            step.transitionSec,
-            step.pairGroupId,
-            step.side,
-          ],
-        );
-      }
+      await insertSeedRoutine(db, routine, (key) => actionIdByKey.get(key) ?? null, now, nextId);
     }
 
     await db.run('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [
@@ -264,4 +299,73 @@ export async function runSeeds(deps: SeedDependencies): Promise<SeedOutcome> {
   });
 
   return 'seeded';
+}
+
+/** Existing routine names, used to spot a shipped routine the user deleted. */
+async function listRoutineNames(db: SqlDatabase): Promise<Set<string>> {
+  const rows = await db.all<{ name: string }>('SELECT name FROM routines');
+  return new Set(rows.map((row) => row.name));
+}
+
+/** Map each shipped Action name to the library row that still owns it. */
+async function mapSeedActionIdsByName(db: SqlDatabase): Promise<Map<string, string>> {
+  const wanted = new Set(SEED_ACTIONS.map((definition) => definition.name));
+  const rows = await db.all<{ id: string; name: string }>('SELECT id, name FROM actions');
+  const byName = new Map<string, string>();
+  for (const row of rows) {
+    if (wanted.has(row.name)) {
+      byName.set(row.name, row.id);
+    }
+  }
+  return byName;
+}
+
+/**
+ * TASK-009 repair pass: bring back a shipped example routine the user deleted.
+ *
+ * `runSeeds` is one-shot by design (`seed_version`), which also meant a routine
+ * that disappeared *after* the first launch could never come back. This pass
+ * runs on every boot and is deliberately narrow:
+ *
+ * - only installs that already recorded seeding are eligible, so a fresh
+ *   install and a user-owned library are both left alone;
+ * - a shipped routine counts as present by its catalog name, so an existing
+ *   (even user-edited) routine is never duplicated or overwritten;
+ * - only the missing routines are re-created, each with a fresh step snapshot
+ *   linked to the matching library Action when it still exists.
+ */
+export async function repairSeededRoutines(deps: SeedDependencies): Promise<SeedRepairResult> {
+  const { db } = deps;
+  const clock = deps.clock ?? new SystemWallClock();
+  const nextId = deps.generateId ?? generateId;
+
+  if (!(await hasSeedMarker(db))) {
+    return { outcome: 'not-applicable', restoredRoutineNames: [] };
+  }
+
+  const presentNames = await listRoutineNames(db);
+  const missing = SEED_ROUTINES.filter((routine) => !presentNames.has(routine.name));
+  if (missing.length === 0) {
+    return { outcome: 'intact', restoredRoutineNames: [] };
+  }
+
+  const actionIdByName = await mapSeedActionIdsByName(db);
+  const now = new Date(clock.nowMs()).toISOString();
+
+  await db.transaction(async () => {
+    for (const routine of missing) {
+      await insertSeedRoutine(
+        db,
+        routine,
+        (key) => {
+          const definition = SEED_ACTION_BY_KEY.get(key);
+          return definition ? actionIdByName.get(definition.name) ?? null : null;
+        },
+        now,
+        nextId,
+      );
+    }
+  });
+
+  return { outcome: 'repaired', restoredRoutineNames: missing.map((routine) => routine.name) };
 }

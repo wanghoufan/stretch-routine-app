@@ -1,24 +1,23 @@
 # HANDOFF｜拉伸语音播报App V1开发
 
-- Captured at（YYYY-MM-DD HH:MM）：2026-09-18 00:50
-- PROJECT_PHASE：DEVELOP（用户口令“根据plan推进开发”视为第二阶段开发授权；无正式PRODUCT_PLAN模板，用SDD开发包V1.0为基线）
-- PLAN_VERSION：SDD-V1.0
-- PLAN_READINESS_SCORE：空（SDD包已冻结，直接进DEVELOP）
-- PLAN_GATE：APPROVED（用户已授权开发）
-- DEV_BASELINE：SDD-V1.0（docs/plan内宪法+SPEC+PLAN+TASKS V1.0）+ 局部B类扩展：种子数据模块（Requirement局部新增，见本HANDOFF任务备注B-1，不召Planner）
-- CHANGE_REQUEST：B（种子数据：首次启动预置常用拉伸动作库+2条示例流程；属局部功能新增，不动核心流程/数据结构/权限，不改宪法SPEC）
-- Stage ID（本阶段叫什么）：stretch-app-v1-seedqa（025-ing-拉伸语音播报 app）
+- Captured at（YYYY-MM-DD HH:MM）：2026-09-18 11:00
+- PROJECT_PHASE：DEVELOP（DEV_BASELINE=PRODUCT_PLAN_V1.2，PLAN_GATE=APPROVED）
+- PLAN_VERSION：PRODUCT_PLAN_V1.2
+- PLAN_READINESS_SCORE：94
+- PLAN_GATE：APPROVED
+- DEV_BASELINE：PRODUCT_PLAN_V1.2
+- CHANGE_REQUEST：NONE
+- Stage ID（本阶段叫什么）：stretch-app-v11-harden-wave1
 - 剩 P0（没完的才列，多一条都不行）：
-  - P0-3：种子动作库+示例流程未进包（TASK-005）
-  - P0-4：T062后台/锁屏跨边界计时、T095真机TTS发声/中断、整机功能实测未做（TASK-006；用户已批准现在做语音测试，禁音令解除）
-- 当前 Task（正干到哪）（累计打回 n/2，supervisor每次打回时TM同步更新）：TASK-005种子开发待派builder（打回累计沿用1/2，不 crossing tasks 重新计，同一Task内计）；TASK-001/002/003均PASS已收工
-- 执行链/Session（可选，仅真 resume 通道填，普通 subagent 可空；TM 只记录/引用，ID 由基础设施返回，不手造、不要求用户复制；返工确认是否原链；senior 升级开新链后更新）：builder走codebuddy通道直调（override表为准）；DISPATCH-LOG已落4行（TASK-001 builder/TASK-002 reviewer/TASK-003 builder/TASK-001/003-supervise），TASK-MODEL-LOG已落3行（TASK-001/002/003均PASS）
-- 未闭环评审意见（code-reviewer/qa 留的还没改的）：code-reviewer P1-1（后台到期cue不补播待T062实证）/P1-2（warning每步一次，已由builder在silent-install §4确认符合US7、保持现状）；均不阻塞，待qa T062/T095闭环
-- docs 落盘清单（本轮新增/改了哪几个 docs 文件）：docs/handoff/HANDOFF.md（本轮对齐更新）；docs/review/CODE_REVIEW-2026-09-17.md（TASK-002结论P0=0过）；docs/qa/android-v1-silent-install.md（TASK-003安装+首页渲染证据+EAS Build 1590108d，§5挂账T062/T095）；docs/qa/android-tts-spike.md、android-background-spike.md（方案已落地、真机待T062/T095）；docs/model/TASK-MODEL-LOG.jsonl（3行）+DISPATCH-LOG.jsonl（4行）；docs/architecture/background-decision.md、persistence-decision.md
-- 下一步（Next Single Action）：派builder做TASK-005（种子数据+EAS重打包+adb安装），然后reviewer复核，qa做TASK-006整机语音实测
+  - P0-5：native R004-R006/R022-R034待构建通道（EAS额度10-01恢复），Wave1纯JS部分已收工
+- 当前 Task（正干到哪）（累计打回 n/2，supervisor每次打回时TM同步更新）：TASK-007 Wave1与TASK-009种子修复技术PASS待supervisor重检（各打回1/2：均为补账本，技术未否决，未达升级线）
+- 执行链/Session（可选，仅真 resume 通道填，普通 subagent 可空；TM 只记录/引用，ID 由基础设施返回，不手造、不要求用户复制；返工确认是否原链；senior 升级开新链后更新）：builder已按用户生效指令切opencode通道（opencode-go/deepseek-v4.1-flash，TASK-009首派PASS即真调验证通过；旧codebuddy通道作废）；qa=true codex/gpt-5.6-luna本窗口adb直驱；TASK-MODEL-LOG 13行、DISPATCH-LOG 17行齐备互验
+- 未闭环评审意见（code-reviewer/qa 留的还没改的）：Wave1两review均P0=0无遗留；V1.0遗留P1-1（后台到期cue不补播）转V1.1 R025-R028实测，P1-2已确认符合US7保持现状；QA的WAVE1-SEED-001已CLOSED；均不阻塞
+- docs 落盘清单（本轮新增/改了哪几个 docs 文件）：docs/handoff/HANDOFF.md（Wave1对齐，DEV_BASELINE单写V1.2）；docs/pm/PRODUCT_PLAN_V1.1.md + PRODUCT_PLAN_V1.2.md；docs/review/RESEARCH_REVIEW-V1.1-R1.md + RESEARCH_REVIEW-V1.2-R2.md + CODE_REVIEW-v11-wave1.md + CODE_REVIEW-seed-repair.md；docs/qa/v1.1-baseline.md + v11-wave1-functional.md；docs/model/TASK-MODEL-LOG.jsonl（13行）+DISPATCH-LOG.jsonl（17行）
+- 下一步（Next Single Action）：Wave1收工；native R004-R006/R022-R034待构建通道（EAS 10-01），通道可用后派builder继续
 - 人要拍什么板（列出来问，不问不许开工）：无——用户已授权“中间不要问不要停，小问题自己解决，不行挂账，完成后推送到手机”；本轮APK已装机（com.stretchroutine.v1 v1.0.0），语音实测待用户睡醒后配合
 - permission_request：无
-- 收尾记一笔：2026-09-18 neat-freak对齐：HANDOFF已反映TASK-001/002/003完成与T062/T095挂账明天、账本3行+4派齐；README仍为模板包旧文已加一句指向真实工程；项目内无可清临时文件（.expo/.DS_Store为常规生成物，截图证据在Downloads外置）
+- 收尾记一笔：Wave1收工对齐：HANDOFF反映TASK-007/008/009完成（技术PASS各补账本打回1次，未达升级线）、DEV_BASELINE单写V1.2、账本13行+17派齐；native R004-R006/R022-R034挂账10-01构建通道；工作区改动在hardening/v1.1分支未合并不影响main基线
 
 ## 恢复读盘（全体系唯一顺序，别乱）
 

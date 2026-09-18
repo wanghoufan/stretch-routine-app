@@ -42,7 +42,8 @@ export function shouldPlayTransition(steps: readonly RoutineStep[], fromIndex: n
 export interface PhaseOptions {
   /** ms of the previous phase that spilled past its boundary (background jumps). */
   overflowMs: number;
-  nowMs: number;
+  /** Monotonic elapsed ms of the transition. */
+  nowElapsedMs: number;
   completedPhaseMs: number;
   /** Keep the paused flag across the phase change (skip while paused). */
   keepPaused: boolean;
@@ -64,14 +65,14 @@ function buildPhase(
     currentStepIndex,
     // The overflow is carried forward so a long background gap does not shift
     // every following boundary by the amount that was missed.
-    phaseStartedAtEpochMs: options.nowMs - Math.max(0, options.overflowMs),
-    pausedAtEpochMs: paused ? options.nowMs : null,
+    phaseStartedElapsedMs: options.nowElapsedMs - Math.max(0, options.overflowMs),
+    pausedAtElapsedMs: paused ? options.nowElapsedMs : null,
     accumulatedPauseMs: 0,
     effectiveStepDurationMs,
     effectiveTransitionDurationMs,
     runtimeExtensionMs: 0,
     completedPhaseMs: options.completedPhaseMs,
-    updatedAtEpochMs: options.nowMs,
+    lastUpdatedElapsedMs: options.nowElapsedMs,
   };
 }
 
@@ -121,37 +122,37 @@ export function startTransitionPhase(
 }
 
 /** Mark the session finished. The safe, terminal end of a normal routine. */
-export function completeSession(session: ActiveSession, nowMs: number): ActiveSession {
+export function completeSession(session: ActiveSession, nowElapsedMs: number): ActiveSession {
   return {
     ...session,
     state: 'COMPLETED',
-    phaseStartedAtEpochMs: null,
-    pausedAtEpochMs: null,
+    phaseStartedElapsedMs: null,
+    pausedAtElapsedMs: null,
     runtimeExtensionMs: 0,
     completedPhaseMs: session.completedPhaseMs,
-    updatedAtEpochMs: nowMs,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }
 
 /** End the routine early (user pressed 结束). */
-export function stopSession(session: ActiveSession, nowMs: number): ActiveSession {
+export function stopSession(session: ActiveSession, nowElapsedMs: number): ActiveSession {
   return {
     ...session,
     state: 'STOPPED',
-    phaseStartedAtEpochMs: null,
-    pausedAtEpochMs: null,
+    phaseStartedElapsedMs: null,
+    pausedAtElapsedMs: null,
     runtimeExtensionMs: 0,
-    updatedAtEpochMs: nowMs,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }
 
 /** Mark an unrecoverable session problem; the UI offers a safe exit. */
-export function failSession(session: ActiveSession, nowMs: number): ActiveSession {
+export function failSession(session: ActiveSession, nowElapsedMs: number): ActiveSession {
   return {
     ...session,
     state: 'ERROR',
-    phaseStartedAtEpochMs: null,
-    pausedAtEpochMs: null,
-    updatedAtEpochMs: nowMs,
+    phaseStartedElapsedMs: null,
+    pausedAtElapsedMs: null,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }

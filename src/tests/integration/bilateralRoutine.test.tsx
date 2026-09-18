@@ -133,7 +133,7 @@ describe('US4 双侧配对动作 (T073)', () => {
     await press(`routine-start-${routine.id}`);
     expect(await screen.findByTestId('runner-current-step')).toHaveTextContent('斜方肌拉伸（左）');
 
-    advanceTime(context.clock, context.ticker, 10_000);
+    advanceTime(context, 10_000);
 
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('斜方肌拉伸（右）');
     expect(speaker.spoken).toEqual(['左侧斜方肌拉伸，10秒', '右侧斜方肌拉伸，10秒']);

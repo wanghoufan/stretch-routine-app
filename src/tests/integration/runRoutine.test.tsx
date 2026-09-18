@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react-native';
 import { renderApp } from '../support/renderApp';
-import { createTestContext } from '../support/testContext';
+import { createTestContext, loadActiveSession } from '../support/testContext';
 import { createTestSpeaker } from '../support/fixtures';
 import { advanceTime, press } from '../support/interaction';
 
@@ -37,23 +37,23 @@ describe('US1 自动播放到完成 (T046)', () => {
     expect(screen.getByTestId('runner-next-step')).toHaveTextContent('下一个：B');
 
     // t=10s: step A ends, the 5s transition prepares B.
-    advanceTime(context.clock, context.ticker, 10_000);
+    advanceTime(context, 10_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('准备下一个动作');
     expect(screen.getByTestId('runner-phase')).toHaveTextContent('过渡中 · 接着做 B');
 
     // t=15s: step B starts.
-    advanceTime(context.clock, context.ticker, 5_000);
+    advanceTime(context, 5_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('B');
     expect(screen.getByText('第 2 / 3 个')).toBeTruthy();
 
     // t=35s: step B has no transition, so step C starts directly.
-    advanceTime(context.clock, context.ticker, 20_000);
+    advanceTime(context, 20_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('C');
     expect(screen.getByText('第 3 / 3 个')).toBeTruthy();
     expect(screen.queryByTestId('runner-next-step')).toBeNull();
 
     // t=65s: the routine completes and the completion screen appears.
-    advanceTime(context.clock, context.ticker, 30_000);
+    advanceTime(context, 30_000);
     expect(await screen.findByText('流程完成')).toBeTruthy();
     expect(screen.getByTestId('completion-routine-name')).toHaveTextContent('早间流程');
     expect(screen.getByTestId('completion-summary')).toHaveTextContent('共 3 个动作 · 用时 1分5秒');
@@ -68,7 +68,7 @@ describe('US1 自动播放到完成 (T046)', () => {
     ]);
 
     // A finished routine leaves no session to recover.
-    expect(await context.services.sessions.loadActive()).toBeNull();
+    expect(await loadActiveSession(context.services)).toBeNull();
 
     // Done returns to Home.
     await press('completion-done');
@@ -98,7 +98,7 @@ describe('US1 自动播放到完成 (T046)', () => {
     await screen.findByTestId('runner-current-step');
 
     // A single tick after 25 seconds of being away lands on step C.
-    advanceTime(context.clock, context.ticker, 25_000);
+    advanceTime(context, 25_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('C');
     expect(screen.getByTestId('runner-remaining')).toHaveTextContent('0:05');
     // Passed cues are not replayed: only the current step was announced.
@@ -107,15 +107,15 @@ describe('US1 自动播放到完成 (T046)', () => {
     context.dispose();
   });
 
-  it('shows an error state instead of crashing when the routine is missing', async () => {
+  it('shows a safe state instead of crashing when nothing is running', async () => {
     const context = await createTestContext();
     renderApp({
       services: context.services,
       speaker: createTestSpeaker(),
-      initialRoute: { name: 'Runner', params: { routineId: 'missing' } },
+      initialRoute: { name: 'Runner', params: undefined },
     });
 
-    expect(await screen.findByText('无法开始流程')).toBeTruthy();
+    expect(await screen.findByText('无法继续流程')).toBeTruthy();
     context.dispose();
   });
 });

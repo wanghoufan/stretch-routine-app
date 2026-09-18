@@ -1,17 +1,14 @@
-import type { Routine } from '../../../domain/routine/Routine';
 import type { RoutineStep } from '../../../domain/routine/RoutineStep';
 import type { ActiveSession } from '../../../domain/session/ActiveSession';
 import { isPaused } from '../../../domain/session/RunnerState';
-import type { RoutineRepository } from '../../../data/repositories/routineRepository';
 import type { AppSettings } from '../../settings/settingsModel';
-import type { Clock } from '../../../services/clock/Clock';
+import type { MonotonicClock } from '../../../services/clock';
+import type { BootInfoProvider } from '../../../services/runtime/BootInfo';
+import type { ProcessTerminationProvider } from '../../../services/runtime/Termination';
 import { TtsService, type Cue } from '../../../services/tts/ttsService';
-import type { IdGenerator } from '../../../shared/utils/id';
-import { generateId } from '../../../shared/utils/id';
 import {
   advanceRunner,
   applyRunnerControl,
-  startRunner,
   type RunnerControl,
   type RunnerEvent,
 } from '../domain/runnerMachine';
@@ -20,43 +17,46 @@ import { recoverSession } from './sessionRecovery';
 import type { SessionPersistence } from './sessionPersistence';
 
 /**
- * Imperative runner controller (T042).
+ * Imperative runner controller (R019).
  *
- * Owns the authoritative session and turns ticks/controls into session updates,
- * cue announcements and persistence writes. Keeping this outside React means
- * the whole hands-free flow is testable without rendering anything.
+ * The controller is **ActiveSession-driven**: everything it plays comes from the
+ * session's immutable `snapshot`, never from the source Routine. A routine edit
+ * or delete therefore cannot affect an in-flight run, and the Runner route no
+ * longer needs a `routineId`.
  *
- * The React hook (`useRunner`) is a thin `useSyncExternalStore` wrapper.
+ * Keeping this outside React means the whole hands-free flow is testable
+ * without rendering anything. The React hook (`useRunner`) is a thin
+ * `useSyncExternalStore` wrapper.
  */
 
 export type RunnerStatus = 'loading' | 'ready' | 'missing' | 'error';
 
 export interface RunnerSnapshot {
   status: RunnerStatus;
-  routine: Routine | null;
-  steps: readonly RoutineStep[];
   session: ActiveSession | null;
-  /** Presentation time. Only changes when the ticker fires. */
-  nowMs: number;
+  /** Steps of the immutable snapshot; empty until the session loads. */
+  steps: readonly RoutineStep[];
+  routineName: string | null;
+  /** Presentation time (monotonic). Only changes when the ticker fires. */
+  nowElapsedMs: number;
   errorMessage: string | null;
 }
 
 export interface RunnerControllerDeps {
-  routineId: string;
-  routines: Pick<RoutineRepository, 'getWithSteps'>;
   persistence: SessionPersistence;
-  clock: Clock;
+  monotonic: MonotonicClock;
+  bootInfo: BootInfoProvider;
+  termination: ProcessTerminationProvider;
   tts: TtsService;
   settings: AppSettings;
-  generateId?: IdGenerator;
 }
 
 const INITIAL_SNAPSHOT: RunnerSnapshot = {
   status: 'loading',
-  routine: null,
-  steps: [],
   session: null,
-  nowMs: 0,
+  steps: [],
+  routineName: null,
+  nowElapsedMs: 0,
   errorMessage: null,
 };
 
@@ -88,7 +88,7 @@ export class RunnerController {
     this.deps.settings = settings;
   }
 
-  /** Load the routine and either resume a stored session or start fresh. */
+  /** Load the stored active session and resume it if it is safe to do so. */
   async load(): Promise<void> {
     if (this.loaded) {
       return;
@@ -96,49 +96,50 @@ export class RunnerController {
     this.loaded = true;
 
     try {
-      const loaded = await this.deps.routines.getWithSteps(this.deps.routineId);
-      if (this.disposed) {
-        return;
-      }
-      if (!loaded) {
-        this.patch({ status: 'missing', errorMessage: '流程不存在' });
-        return;
-      }
-
-      const nowMs = this.deps.clock.nowMs();
-      const stored = await this.deps.persistence.load();
+      const loaded = await this.deps.persistence.load();
       if (this.disposed) {
         return;
       }
 
-      let session: ActiveSession | null = null;
-      let events: RunnerEvent[] = [];
-
-      if (stored && stored.routineId === this.deps.routineId) {
-        const outcome = recoverSession({ stored, steps: loaded.steps, nowMs });
-        if (outcome.kind === 'resumed') {
-          session = outcome.session;
-          events = outcome.events;
-        } else {
-          await this.deps.persistence.clear();
-        }
+      if (loaded.status === 'corrupt') {
+        this.patch({ status: 'missing', errorMessage: `会话数据损坏，已安全清除：${loaded.reason}` });
+        return;
+      }
+      if (loaded.status === 'none') {
+        this.patch({ status: 'missing', errorMessage: '没有进行中的流程' });
+        return;
       }
 
-      if (!session) {
-        const started = startRunner({
-          sessionId: (this.deps.generateId ?? generateId)('ses'),
-          routineId: this.deps.routineId,
-          steps: loaded.steps,
-          nowMs,
-        });
-        session = started.session;
-        events = started.events;
-        // A brand new run must not inherit cue de-duplication from an old one.
-        this.deps.tts.resetSession();
+      const nowElapsedMs = this.deps.monotonic.nowElapsedMs();
+      const outcome = recoverSession({
+        stored: loaded.session,
+        nowElapsedMs,
+        currentBootCount: this.deps.bootInfo.getBootCount(),
+        termination: this.deps.termination.getTerminationSignal(),
+      });
+
+      if (outcome.kind === 'discarded') {
+        await this.deps.persistence.clear();
+        this.patch({ status: 'missing', errorMessage: `无法恢复上次流程（${outcome.reason}）` });
+        return;
+      }
+      if (outcome.kind !== 'resumed') {
+        this.patch({ status: 'missing', errorMessage: '没有进行中的流程' });
+        return;
       }
 
-      this.patch({ status: 'ready', routine: loaded.routine, steps: loaded.steps, session, nowMs });
-      this.announceEvents(events);
+      const { session, events, autoPlay } = outcome;
+      this.patch({
+        status: 'ready',
+        session,
+        steps: session.snapshot.steps,
+        routineName: session.routineName,
+        nowElapsedMs,
+      });
+      // Conservative termination / API < 30: rebuild the session silently.
+      if (autoPlay) {
+        this.announceEvents(events);
+      }
       await this.persist(session);
     } catch (error) {
       this.patch({
@@ -151,22 +152,24 @@ export class RunnerController {
   /** Presentation tick + authoritative boundary resolution. */
   tick(): void {
     const { session, steps } = this.snapshot;
-    const nowMs = this.deps.clock.nowMs();
+    const nowElapsedMs = this.deps.monotonic.nowElapsedMs();
 
     if (!session || steps.length === 0) {
-      this.patch({ nowMs });
+      this.patch({ nowElapsedMs });
       return;
     }
 
-    const result = advanceRunner(session, steps, nowMs);
+    const result = advanceRunner(session, steps, nowElapsedMs);
     if (result.session !== session) {
-      this.apply(result.session, result.events, nowMs);
+      this.apply(result.session, result.events, nowElapsedMs);
       return;
     }
 
-    this.patch({ nowMs });
+    this.patch({ nowElapsedMs });
     // The countdown warning is time-driven, not event-driven (T085).
-    this.announceCues(buildCues({ session, steps, events: [], settings: this.deps.settings, nowMs }));
+    this.announceCues(
+      buildCues({ session, steps, events: [], settings: this.deps.settings, nowElapsedMs }),
+    );
   }
 
   control(control: RunnerControl): void {
@@ -174,9 +177,9 @@ export class RunnerController {
     if (!session) {
       return;
     }
-    const nowMs = this.deps.clock.nowMs();
-    const result = applyRunnerControl(session, steps, control, nowMs);
-    this.apply(result.session, result.events, nowMs);
+    const nowElapsedMs = this.deps.monotonic.nowElapsedMs();
+    const result = applyRunnerControl(session, steps, control, nowElapsedMs);
+    this.apply(result.session, result.events, nowElapsedMs);
   }
 
   /** Single 暂停/继续 control: the intent depends on the authoritative state. */
@@ -193,8 +196,8 @@ export class RunnerController {
     this.listeners.clear();
   }
 
-  private apply(session: ActiveSession, events: readonly RunnerEvent[], nowMs: number): void {
-    this.patch({ session, nowMs });
+  private apply(session: ActiveSession, events: readonly RunnerEvent[], nowElapsedMs: number): void {
+    this.patch({ session, nowElapsedMs });
     this.announceEvents(events);
     void this.persist(session);
   }
@@ -205,7 +208,13 @@ export class RunnerController {
       return;
     }
     this.announceCues(
-      buildCues({ session, steps, events, settings: this.deps.settings, nowMs: this.deps.clock.nowMs() }),
+      buildCues({
+        session,
+        steps,
+        events,
+        settings: this.deps.settings,
+        nowElapsedMs: this.deps.monotonic.nowElapsedMs(),
+      }),
     );
   }
 

@@ -1,5 +1,6 @@
 import type { ActiveSession } from '../../../domain/session/ActiveSession';
 import { isActive, isPaused, isRunning, togglePauseState } from '../../../domain/session/RunnerState';
+import { createSnapshot } from '../../../domain/session/SessionSnapshot';
 import type { RoutineStep } from '../../../domain/routine/RoutineStep';
 import { ADD_TIME_MS } from '../../../domain/routine/constants';
 import { RunnerError } from '../../../shared/errors';
@@ -16,9 +17,11 @@ import {
  * Pure runner state machine (Constitution §3.2/§3.3, PLAN §5, §7).
  *
  * The machine is a set of pure functions: given the current session, the
- * routine steps and an explicit `nowMs`, it returns the next session plus the
- * events the cue coordinator may speak. It never touches a timer, the UI or
- * TTS, which is what keeps runner behaviour deterministic and testable.
+ * snapshot steps and an explicit **monotonic** `nowElapsedMs`, it returns the
+ * next session plus the events the cue coordinator may speak. It never touches a
+ * timer, the UI or TTS, which is what keeps runner behaviour deterministic and
+ * testable — and it never reads the wall clock, so a wall-clock jump cannot move
+ * the countdown (R007/R012).
  */
 
 export type RunnerEvent =
@@ -43,8 +46,15 @@ export type RunnerControl =
 export interface StartRunnerInput {
   sessionId: string;
   routineId: string;
+  routineName: string;
+  /** Ordered steps to freeze into the immutable snapshot. */
   steps: readonly RoutineStep[];
-  nowMs: number;
+  /** Monotonic elapsed ms when the run starts. */
+  nowElapsedMs: number;
+  /** Wall-clock ms at start, kept for display/age only. */
+  wallMs: number;
+  /** Boot identity that owns `nowElapsedMs`. */
+  bootCount: number;
 }
 
 /** Start a routine at step 0 (SPEC US1 scenario 1). */
@@ -57,26 +67,38 @@ export function startRunner(input: StartRunnerInput): RunnerResult {
     throw new RunnerError('流程没有可播放的步骤');
   }
 
+  const snapshot = createSnapshot({
+    routineId: input.routineId,
+    routineName: input.routineName,
+    steps: input.steps,
+    capturedAtWallMs: input.wallMs,
+  });
+
   const session: ActiveSession = {
     sessionId: input.sessionId,
     routineId: input.routineId,
+    routineName: input.routineName,
     state: 'RUNNING_STEP',
     currentStepIndex: 0,
-    phaseStartedAtEpochMs: input.nowMs,
-    pausedAtEpochMs: null,
+    phaseStartedElapsedMs: input.nowElapsedMs,
+    pausedAtElapsedMs: null,
     accumulatedPauseMs: 0,
     effectiveStepDurationMs: first.durationSec * 1000,
     effectiveTransitionDurationMs: first.transitionSec * 1000,
     runtimeExtensionMs: 0,
     completedPhaseMs: 0,
-    updatedAtEpochMs: input.nowMs,
+    lastUpdatedElapsedMs: input.nowElapsedMs,
+    updatedAtWallMs: input.wallMs,
+    bootCount: input.bootCount,
+    snapshotVersion: snapshot.version,
+    snapshot,
   };
 
   return { session, events: [{ type: 'STEP_STARTED', stepIndex: 0, suppressed: false }] };
 }
 
 /**
- * Resolve every phase boundary that `nowMs` has already crossed.
+ * Resolve every phase boundary that `nowElapsedMs` has already crossed.
  *
  * A single call can cross several boundaries at once — that is exactly what
  * happens after the app sat in the background for a few minutes. Intermediate
@@ -85,7 +107,7 @@ export function startRunner(input: StartRunnerInput): RunnerResult {
 export function advanceRunner(
   session: ActiveSession,
   steps: readonly RoutineStep[],
-  nowMs: number,
+  nowElapsedMs: number,
 ): RunnerResult {
   if (steps.length === 0 || !isRunning(session.state)) {
     return { session, events: [] };
@@ -97,7 +119,7 @@ export function advanceRunner(
 
   while (batches.length < guard && isRunning(current.state)) {
     const total = phaseTotalMs(current);
-    const elapsed = phaseElapsedMs(current, nowMs);
+    const elapsed = phaseElapsedMs(current, nowElapsedMs);
     if (elapsed < total) {
       break;
     }
@@ -113,7 +135,7 @@ export function advanceRunner(
       if (shouldPlayTransition(steps, fromIndex)) {
         current = startTransitionPhase(current, steps, fromIndex, {
           overflowMs,
-          nowMs,
+          nowElapsedMs,
           completedPhaseMs,
           keepPaused: false,
         });
@@ -126,26 +148,26 @@ export function advanceRunner(
       } else if (nextIndex < steps.length) {
         current = startStepPhase(current, steps, nextIndex, {
           overflowMs,
-          nowMs,
+          nowElapsedMs,
           completedPhaseMs,
           keepPaused: false,
         });
         batch.push({ type: 'STEP_STARTED', stepIndex: nextIndex, suppressed: false });
       } else {
         // The final step must still count towards the routine's elapsed time.
-        current = completeSession({ ...current, completedPhaseMs }, nowMs);
+        current = completeSession({ ...current, completedPhaseMs }, nowElapsedMs);
         batch.push({ type: 'COMPLETED' });
       }
     } else {
       // Transition finished: enter the step it was preparing.
       const targetIndex = current.currentStepIndex;
       if (targetIndex >= steps.length) {
-        current = completeSession({ ...current, completedPhaseMs }, nowMs);
+        current = completeSession({ ...current, completedPhaseMs }, nowElapsedMs);
         batch.push({ type: 'COMPLETED' });
       } else {
         current = startStepPhase(current, steps, targetIndex, {
           overflowMs,
-          nowMs,
+          nowElapsedMs,
           completedPhaseMs,
           keepPaused: false,
         });
@@ -170,38 +192,39 @@ export function advanceRunner(
   return { session: current, events };
 }
 
-function applyPause(session: ActiveSession, nowMs: number): ActiveSession {
+function applyPause(session: ActiveSession, nowElapsedMs: number): ActiveSession {
   if (!isRunning(session.state)) {
     return session;
   }
   return {
     ...session,
     state: togglePauseState(session.state),
-    pausedAtEpochMs: nowMs,
-    updatedAtEpochMs: nowMs,
+    pausedAtElapsedMs: nowElapsedMs,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }
 
 /**
  * Resume the exact prior phase by folding the pause length into
- * `accumulatedPauseMs`; `phaseStartedAtEpochMs` never moves (PLAN §5 rule 5).
+ * `accumulatedPauseMs`; `phaseStartedElapsedMs` never moves (PLAN §5 rule 5).
  */
-function applyResume(session: ActiveSession, nowMs: number): ActiveSession {
+function applyResume(session: ActiveSession, nowElapsedMs: number): ActiveSession {
   if (!isPaused(session.state)) {
     return session;
   }
-  const pausedFor = session.pausedAtEpochMs === null ? 0 : Math.max(0, nowMs - session.pausedAtEpochMs);
+  const pausedFor =
+    session.pausedAtElapsedMs === null ? 0 : Math.max(0, nowElapsedMs - session.pausedAtElapsedMs);
   return {
     ...session,
     state: togglePauseState(session.state),
-    pausedAtEpochMs: null,
+    pausedAtElapsedMs: null,
     accumulatedPauseMs: session.accumulatedPauseMs + pausedFor,
-    updatedAtEpochMs: nowMs,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }
 
 /** +10s: extend the current step at runtime only (SPEC US5 scenario 2). */
-function applyAddTime(session: ActiveSession, nowMs: number, extensionMs: number): ActiveSession {
+function applyAddTime(session: ActiveSession, nowElapsedMs: number, extensionMs: number): ActiveSession {
   if (session.state !== 'RUNNING_STEP' && session.state !== 'PAUSED_STEP') {
     return session;
   }
@@ -210,7 +233,7 @@ function applyAddTime(session: ActiveSession, nowMs: number, extensionMs: number
     ...session,
     effectiveStepDurationMs: session.effectiveStepDurationMs + safeExtension,
     runtimeExtensionMs: session.runtimeExtensionMs + safeExtension,
-    updatedAtEpochMs: nowMs,
+    lastUpdatedElapsedMs: nowElapsedMs,
   };
 }
 
@@ -218,7 +241,7 @@ function applyAddTime(session: ActiveSession, nowMs: number, extensionMs: number
 function applyPrevious(
   session: ActiveSession,
   steps: readonly RoutineStep[],
-  nowMs: number,
+  nowElapsedMs: number,
 ): RunnerResult {
   const targetIndex = session.currentStepIndex - 1;
   if (targetIndex < 0) {
@@ -227,7 +250,7 @@ function applyPrevious(
   }
   const next = startStepPhase(session, steps, targetIndex, {
     overflowMs: 0,
-    nowMs,
+    nowElapsedMs,
     completedPhaseMs: plannedCompletedMsBefore(steps, targetIndex),
     keepPaused: isPaused(session.state),
   });
@@ -238,10 +261,10 @@ function applyPrevious(
 function applySkip(
   session: ActiveSession,
   steps: readonly RoutineStep[],
-  nowMs: number,
+  nowElapsedMs: number,
 ): RunnerResult {
   const keepPaused = isPaused(session.state);
-  const elapsedContribMs = phaseElapsedMs(session, nowMs);
+  const elapsedContribMs = phaseElapsedMs(session, nowElapsedMs);
   const completedPhaseMs = session.completedPhaseMs + elapsedContribMs;
 
   // Skipping during a transition means "stop waiting, start the prepared step".
@@ -252,14 +275,14 @@ function applySkip(
 
   if (targetIndex >= steps.length) {
     return {
-      session: completeSession({ ...session, completedPhaseMs }, nowMs),
+      session: completeSession({ ...session, completedPhaseMs }, nowElapsedMs),
       events: [{ type: 'COMPLETED' }],
     };
   }
 
   const next = startStepPhase(session, steps, targetIndex, {
     overflowMs: 0,
-    nowMs,
+    nowElapsedMs,
     completedPhaseMs,
     keepPaused,
   });
@@ -274,30 +297,30 @@ export function applyRunnerControl(
   session: ActiveSession,
   steps: readonly RoutineStep[],
   control: RunnerControl,
-  nowMs: number,
+  nowElapsedMs: number,
 ): RunnerResult {
-  const ticked = advanceRunner(session, steps, nowMs);
+  const ticked = advanceRunner(session, steps, nowElapsedMs);
   const base = ticked.session;
   const events = [...ticked.events];
 
   switch (control.type) {
     case 'PAUSE':
-      return { session: applyPause(base, nowMs), events };
+      return { session: applyPause(base, nowElapsedMs), events };
 
     case 'RESUME': {
-      const resumed = applyResume(base, nowMs);
-      const afterResume = advanceRunner(resumed, steps, nowMs);
+      const resumed = applyResume(base, nowElapsedMs);
+      const afterResume = advanceRunner(resumed, steps, nowElapsedMs);
       return { session: afterResume.session, events: [...events, ...afterResume.events] };
     }
 
     case 'ADD_TIME':
-      return { session: applyAddTime(base, nowMs, control.ms ?? ADD_TIME_MS), events };
+      return { session: applyAddTime(base, nowElapsedMs, control.ms ?? ADD_TIME_MS), events };
 
     case 'PREVIOUS': {
       if (!isActive(base.state)) {
         return { session: base, events };
       }
-      const result = applyPrevious(base, steps, nowMs);
+      const result = applyPrevious(base, steps, nowElapsedMs);
       return { session: result.session, events: [...events, ...result.events] };
     }
 
@@ -305,7 +328,7 @@ export function applyRunnerControl(
       if (!isActive(base.state)) {
         return { session: base, events };
       }
-      const result = applySkip(base, steps, nowMs);
+      const result = applySkip(base, steps, nowElapsedMs);
       return { session: result.session, events: [...events, ...result.events] };
     }
 
@@ -313,7 +336,7 @@ export function applyRunnerControl(
       if (!isActive(base.state)) {
         return { session: base, events };
       }
-      return { session: stopSession(base, nowMs), events: [...events, { type: 'STOPPED' }] };
+      return { session: stopSession(base, nowElapsedMs), events: [...events, { type: 'STOPPED' }] };
     }
 
     default:

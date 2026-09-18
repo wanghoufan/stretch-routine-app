@@ -14,8 +14,11 @@ function createHarness(steps: RoutineStep[]) {
   let session: ActiveSession = startRunner({
     sessionId: 'session-1',
     routineId: 'routine-1',
+    routineName: '测试流程',
     steps,
-    nowMs: 0,
+    nowElapsedMs: 0,
+    wallMs: 0,
+    bootCount: 1,
   }).session;
 
   return {
@@ -44,7 +47,7 @@ describe('runner controls (T055)', () => {
       harness.advance(3_000);
       harness.control({ type: 'PAUSE' }, 3_000);
       expect(harness.session.state).toBe('PAUSED_STEP');
-      expect(harness.session.pausedAtEpochMs).toBe(3_000);
+      expect(harness.session.pausedAtElapsedMs).toBe(3_000);
 
       // A full minute passes with the routine paused.
       harness.advance(63_000);
@@ -54,7 +57,7 @@ describe('runner controls (T055)', () => {
       harness.control({ type: 'RESUME' }, 63_000);
       expect(harness.session.state).toBe('RUNNING_STEP');
       expect(harness.session.accumulatedPauseMs).toBe(60_000);
-      expect(harness.session.phaseStartedAtEpochMs).toBe(0);
+      expect(harness.session.phaseStartedElapsedMs).toBe(0);
       expect(remainingMs(harness.session, 63_000)).toBe(7_000);
 
       // 7 more seconds of *running* time finish the step.
@@ -163,7 +166,7 @@ describe('runner controls (T055)', () => {
       expect(harness.session.currentStepIndex).toBe(1);
       expect(harness.session.effectiveStepDurationMs).toBe(20_000);
       expect(harness.session.runtimeExtensionMs).toBe(0);
-      expect(harness.session.phaseStartedAtEpochMs).toBe(35_000);
+      expect(harness.session.phaseStartedElapsedMs).toBe(35_000);
       expect(harness.session.completedPhaseMs).toBe(10_000);
       expect(events).toEqual([{ type: 'STEP_STARTED', stepIndex: 1, suppressed: false }]);
     });
@@ -211,7 +214,7 @@ describe('runner controls (T055)', () => {
 
       expect(harness.session.state).toBe('RUNNING_STEP');
       expect(harness.session.currentStepIndex).toBe(1);
-      expect(harness.session.phaseStartedAtEpochMs).toBe(4_000);
+      expect(harness.session.phaseStartedElapsedMs).toBe(4_000);
       expect(harness.session.completedPhaseMs).toBe(4_000);
       expect(harness.session.runtimeExtensionMs).toBe(0);
       expect(events).toEqual([{ type: 'STEP_STARTED', stepIndex: 1, suppressed: false }]);
@@ -273,8 +276,8 @@ describe('runner controls (T055)', () => {
 
       expect(events).toEqual([{ type: 'STOPPED' }]);
       expect(harness.session.state).toBe('STOPPED');
-      expect(harness.session.phaseStartedAtEpochMs).toBeNull();
-      expect(harness.session.pausedAtEpochMs).toBeNull();
+      expect(harness.session.phaseStartedElapsedMs).toBeNull();
+      expect(harness.session.pausedAtElapsedMs).toBeNull();
     });
 
     it('is a no-op after completion', () => {

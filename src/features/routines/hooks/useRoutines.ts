@@ -5,15 +5,25 @@ import { duplicateRoutine } from '../services/duplicateRoutine';
 import { deleteRoutine } from '../services/deleteRoutine';
 
 /**
- * Home screen data (T035).
+ * Home screen data (T035, R020).
  *
- * Also exposes whether a recoverable session exists for a routine, so Home can
- * offer 继续 instead of 开始 after the app was killed mid-routine (FR-032).
+ * Also exposes the active session so Home can show a Banner and offer 继续 —
+ * including when the source Routine was deleted, because the Banner reads the
+ * session's immutable snapshot rather than the routine list.
  */
+export interface ActiveSessionSummary {
+  routineId: string;
+  /** Name captured at start; shown even if the routine no longer exists. */
+  routineName: string;
+  stepCount: number;
+}
+
 export interface UseRoutinesResult {
   routines: RoutineSummary[];
   /** Routine id with a stored, still-active session, if any. */
   activeSessionRoutineId: string | null;
+  /** Session info for the Home Banner; null when nothing is running. */
+  activeSession: ActiveSessionSummary | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -23,18 +33,31 @@ export interface UseRoutinesResult {
 
 export function useRoutines(services: AppServices): UseRoutinesResult {
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
-  const [activeSessionRoutineId, setActiveSessionRoutineId] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveSessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [summaries, session] = await Promise.all([
+      const [summaries, sessionLoad] = await Promise.all([
         services.routines.listSummaries(),
         services.sessions.loadActive(),
       ]);
       setRoutines(summaries);
-      setActiveSessionRoutineId(session ? session.routineId : null);
+      // Only a session from the current boot can be continued: a row left over
+      // from a previous process has a dead monotonic origin (fail-safe).
+      let running: ActiveSessionSummary | null = null;
+      if (
+        sessionLoad.status === 'ok' &&
+        sessionLoad.session.bootCount === services.bootInfo.getBootCount()
+      ) {
+        running = {
+          routineId: sessionLoad.session.routineId,
+          routineName: sessionLoad.session.routineName,
+          stepCount: sessionLoad.session.snapshot.steps.length,
+        };
+      }
+      setActiveSession(running);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '读取流程失败');
@@ -63,5 +86,14 @@ export function useRoutines(services: AppServices): UseRoutinesResult {
     [services, refresh],
   );
 
-  return { routines, activeSessionRoutineId, loading, error, refresh, duplicate, remove };
+  return {
+    routines,
+    activeSessionRoutineId: activeSession?.routineId ?? null,
+    activeSession,
+    loading,
+    error,
+    refresh,
+    duplicate,
+    remove,
+  };
 }

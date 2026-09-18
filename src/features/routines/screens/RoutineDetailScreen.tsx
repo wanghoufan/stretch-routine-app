@@ -3,6 +3,8 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import type { RoutineWithSteps } from '../../../data/repositories/routineRepository';
 import { useNavigation, useRoute } from '../../../app/navigation/NavigationContext';
 import { useServices } from '../../../app/providers/ServicesContext';
+import { useSettings } from '../../../app/providers/SettingsContext';
+import { useSpeech } from '../../../app/providers/SpeechContext';
 import { totalDurationSec } from '../../../domain/routine/duration';
 import { formatDuration } from '../../../shared/utils/format';
 import { AppButton } from '../../../shared/components/AppButton';
@@ -12,19 +14,26 @@ import { Screen } from '../../../shared/components/Screen';
 import { colors, spacing } from '../../../shared/theme';
 import { buildDeleteRoutineMessage, deleteRoutine } from '../services/deleteRoutine';
 import { duplicateRoutine } from '../services/duplicateRoutine';
+import { StartConflictPrompt } from '../../runner/components/StartConflictPrompt';
+import { useStartRoutine } from '../../runner/hooks/useStartRoutine';
 
 /**
  * Routine detail (T063): inspect the sequence, then start / edit / duplicate /
- * delete it (FR-009, FR-010).
+ * delete it (FR-009, FR-010, R017).
  */
 export function RoutineDetailScreen() {
   const { routineId } = useRoute('RoutineDetail');
   const services = useServices();
   const navigation = useNavigation();
+  const { tts } = useSpeech();
+  const { settings } = useSettings();
 
   const [loaded, setLoaded] = useState<RoutineWithSteps | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const openRunner = useCallback(() => navigation.navigate('Runner', undefined), [navigation]);
+  const startFlow = useStartRoutine(services, tts, settings, openRunner);
 
   const refresh = useCallback(async () => {
     try {
@@ -113,9 +122,34 @@ export function RoutineDetailScreen() {
 
       <AppButton
         label="开始流程"
-        onPress={() => navigation.navigate('Runner', { routineId })}
+        onPress={() => {
+          void startFlow.start(routineId);
+        }}
         testID="detail-start"
       />
+
+      {startFlow.state.status === 'error' ? (
+        <NoticeBanner
+          tone="error"
+          title="无法开始流程"
+          message={startFlow.state.message}
+          actionLabel="知道了"
+          onAction={startFlow.dismissError}
+        />
+      ) : null}
+
+      {startFlow.state.status === 'conflict' ? (
+        <StartConflictPrompt
+          currentRoutineName={startFlow.state.currentRoutineName}
+          onContinue={() => {
+            void startFlow.continueCurrent();
+          }}
+          onReplace={() => {
+            void startFlow.replaceCurrent();
+          }}
+          onCancel={startFlow.cancel}
+        />
+      ) : null}
       <View style={styles.row}>
         <AppButton
           label="编辑"

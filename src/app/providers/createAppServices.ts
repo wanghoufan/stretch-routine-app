@@ -1,13 +1,18 @@
 import type { SqlDatabase } from '../../data/db/Database';
 import { ExpoSqlDatabase } from '../../data/db/expoSqlDatabase';
 import { runMigrations } from '../../data/migrations';
-import { runSeeds, type SeedOutcome } from '../../data/seeds';
+import { runSeeds, repairSeededRoutines, type SeedOutcome, type SeedRepairResult } from '../../data/seeds';
 import { createActionRepository, type ActionRepository } from '../../data/repositories/actionRepository';
 import { createRoutineRepository, type RoutineRepository } from '../../data/repositories/routineRepository';
 import { createSessionRepository, type SessionRepository } from '../../data/repositories/sessionRepository';
 import { createSettingsKeyValueStore } from '../../data/repositories/settingsKeyValueStore';
 import { createSettingsRepository, type SettingsRepository } from '../../features/settings/settingsRepository';
-import { SystemClock, type Clock } from '../../services/clock/Clock';
+import { SystemWallClock, ExpoGoMonotonicClock, type MonotonicClock, type WallClock } from '../../services/clock';
+import { ExpoGoBootInfoProvider, type BootInfoProvider } from '../../services/runtime/BootInfo';
+import {
+  ExpoGoProcessTerminationProvider,
+  type ProcessTerminationProvider,
+} from '../../services/runtime/Termination';
 import { createSystemTicker, type Ticker } from '../../services/ticker/ticker';
 import { generateId, type IdGenerator } from '../../shared/utils/id';
 
@@ -20,10 +25,17 @@ export const DEFAULT_TICK_INTERVAL_MS = 250;
  * The whole app shares one `AppServices` instance, which is also what makes the
  * integration tests able to swap in an in-memory / Node SQLite database and a
  * manual ticker.
+ *
+ * Two clocks, never interchangeable (R007):
+ *  - `wallClock`   -> createdAt/updatedAt and display age;
+ *  - `monotonic`   -> authoritative runner elapsed time.
  */
 export interface AppServices {
   db: SqlDatabase;
-  clock: Clock;
+  wallClock: WallClock;
+  monotonic: MonotonicClock;
+  bootInfo: BootInfoProvider;
+  termination: ProcessTerminationProvider;
   ticker: Ticker;
   tickIntervalMs: number;
   actions: ActionRepository;
@@ -35,7 +47,10 @@ export interface AppServices {
 
 export interface CreateAppServicesOptions {
   db?: SqlDatabase;
-  clock?: Clock;
+  wallClock?: WallClock;
+  monotonic?: MonotonicClock;
+  bootInfo?: BootInfoProvider;
+  termination?: ProcessTerminationProvider;
   ticker?: Ticker;
   tickIntervalMs?: number;
   generateId?: IdGenerator;
@@ -43,16 +58,19 @@ export interface CreateAppServicesOptions {
 
 export function createAppServices(options: CreateAppServicesOptions = {}): AppServices {
   const db = options.db ?? new ExpoSqlDatabase();
-  const clock = options.clock ?? new SystemClock();
+  const wallClock = options.wallClock ?? new SystemWallClock();
   const idGenerator = options.generateId ?? generateId;
 
   return {
     db,
-    clock,
+    wallClock,
+    monotonic: options.monotonic ?? new ExpoGoMonotonicClock(),
+    bootInfo: options.bootInfo ?? new ExpoGoBootInfoProvider(),
+    termination: options.termination ?? new ExpoGoProcessTerminationProvider(),
     ticker: options.ticker ?? createSystemTicker(),
     tickIntervalMs: options.tickIntervalMs ?? DEFAULT_TICK_INTERVAL_MS,
-    actions: createActionRepository({ db, clock, generateId: idGenerator }),
-    routines: createRoutineRepository({ db, clock, generateId: idGenerator }),
+    actions: createActionRepository({ db, clock: wallClock, generateId: idGenerator }),
+    routines: createRoutineRepository({ db, clock: wallClock, generateId: idGenerator }),
     sessions: createSessionRepository(db),
     settings: createSettingsRepository(createSettingsKeyValueStore(db)),
     generateId: idGenerator,
@@ -67,20 +85,25 @@ export async function initializeAppDatabase(services: AppServices): Promise<numb
 export interface AppInitialization {
   schemaVersion: number;
   seed: SeedOutcome;
+  seedRepair: SeedRepairResult;
 }
 
 /**
- * Full boot sequence: schema first, then the one-time seed library (TASK-005).
+ * Full boot sequence: schema first, then the one-time seed library (TASK-005),
+ * then the narrow repair pass (TASK-009) that restores a shipped example
+ * routine deleted after seeding.
  *
  * Seeding is a no-op once `seed_version` is stored or as soon as the device
  * holds user data, so upgrading an existing install never injects content.
  */
 export async function initializeApp(services: AppServices): Promise<AppInitialization> {
   const schemaVersion = await initializeAppDatabase(services);
-  const seed = await runSeeds({
+  const seedDeps = {
     db: services.db,
-    clock: services.clock,
+    clock: services.wallClock,
     generateId: services.generateId,
-  });
-  return { schemaVersion, seed };
+  };
+  const seed = await runSeeds(seedDeps);
+  const seedRepair = await repairSeededRoutines(seedDeps);
+  return { schemaVersion, seed, seedRepair };
 }

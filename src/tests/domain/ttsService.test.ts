@@ -125,39 +125,39 @@ describe('runner cue coordinator (T044, T085)', () => {
   });
 
   it('announces a step start, the next action and completion', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const cues = buildCues({
       session: started.session,
       steps,
       events: started.events,
       settings: DEFAULT_SETTINGS,
-      nowMs: 0,
+      nowElapsedMs: 0,
     });
 
     expect(cues[0]).toMatchObject({ key: 'step:s1:0:start', text: 'A，10秒', interrupt: true });
   });
 
   it('never speaks a suppressed step start', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const cues = buildCues({
       session: started.session,
       steps,
       events: [{ type: 'STEP_STARTED', stepIndex: 1, suppressed: true }],
       settings: DEFAULT_SETTINGS,
-      nowMs: 0,
+      nowElapsedMs: 0,
     });
 
     expect(cues).toEqual([]);
   });
 
   it('announces the upcoming action during a transition', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const cues = buildCues({
       session: started.session,
       steps,
       events: [{ type: 'TRANSITION_STARTED', fromStepIndex: 0, toStepIndex: 1, suppressed: false }],
       settings: DEFAULT_SETTINGS,
-      nowMs: 10_000,
+      nowElapsedMs: 10_000,
     });
 
     expect(cues).toEqual([
@@ -166,52 +166,52 @@ describe('runner cue coordinator (T044, T085)', () => {
   });
 
   it('adds the countdown warning once the step is inside the warning window', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const settings = normalizeSettings({ countdownWarningSec: 5, countdownWarningEnabled: true });
 
-    const early = buildCues({ session: started.session, steps, events: [], settings, nowMs: 4_000 });
+    const early = buildCues({ session: started.session, steps, events: [], settings, nowElapsedMs: 4_000 });
     expect(early).toEqual([]);
 
-    const late = buildCues({ session: started.session, steps, events: [], settings, nowMs: 6_000 });
+    const late = buildCues({ session: started.session, steps, events: [], settings, nowElapsedMs: 6_000 });
     expect(late).toHaveLength(1);
     expect(late[0]?.text).toBe('4秒后结束');
     expect(late[0]?.key).toBe('warn:s1:0:10000');
   });
 
   it('respects the countdown warning setting', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const settings = normalizeSettings({ countdownWarningEnabled: false });
-    expect(buildCues({ session: started.session, steps, events: [], settings, nowMs: 6_000 })).toEqual([]);
+    expect(buildCues({ session: started.session, steps, events: [], settings, nowElapsedMs: 6_000 })).toEqual([]);
   });
 
   it('re-arms the warning after a +10 extension', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const extended = { ...started.session, effectiveStepDurationMs: 20_000, runtimeExtensionMs: 10_000 };
     const settings = normalizeSettings({ countdownWarningSec: 5 });
 
-    const cues = buildCues({ session: extended, steps, events: [], settings, nowMs: 16_000 });
+    const cues = buildCues({ session: extended, steps, events: [], settings, nowElapsedMs: 16_000 });
     expect(cues[0]?.key).toBe('warn:s1:0:20000');
   });
 
   it('announces completion', () => {
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const cues = buildCues({
       session: started.session,
       steps,
       events: [{ type: 'COMPLETED' }],
       settings: DEFAULT_SETTINGS,
-      nowMs: 0,
+      nowElapsedMs: 0,
     });
     expect(cues).toEqual([{ key: 'complete:s1', text: '流程完成', interrupt: true }]);
   });
 
   it('skips the warning for steps shorter than the warning window', () => {
     const shortSteps = makeSteps([['短', 5, 0]]);
-    const started = startRunner({ sessionId: 's1', routineId: 'r1', steps: shortSteps, nowMs: 0 });
+    const started = startRunner({ sessionId: 's1', routineId: 'r1', routineName: '流程', steps: shortSteps, nowElapsedMs: 0, wallMs: 0, bootCount: 1 });
     const settings = normalizeSettings({ countdownWarningSec: 5 });
 
     expect(
-      buildCues({ session: started.session, steps: shortSteps, events: [], settings, nowMs: 1_000 }),
+      buildCues({ session: started.session, steps: shortSteps, events: [], settings, nowElapsedMs: 1_000 }),
     ).toEqual([]);
   });
 });

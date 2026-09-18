@@ -1,32 +1,48 @@
 import type { RunnerState } from './RunnerState';
+import type { ActiveSessionSnapshot } from './SessionSnapshot';
 
 /**
- * The authoritative state required to continue a running routine (PLAN §5).
+ * The authoritative state required to continue a running routine
+ * (PRODUCT_PLAN_V1.2 Data/API — ActiveSession V2; R009).
  *
  * Binding rules:
- * 1. Remaining time is computed from timestamps, never from a counter.
+ * 1. Remaining time is computed from **monotonic elapsed** timestamps, never
+ *    from a counter and never from the wall clock (R007/R012).
  * 2. UI tick frequency is presentation only.
  * 3. TTS callbacks never advance time.
  * 4. Pause freezes effective elapsed time via `accumulatedPauseMs`.
- * 5. Resume extends `accumulatedPauseMs`; `phaseStartedAtEpochMs` never moves.
+ * 5. Resume extends `accumulatedPauseMs`; `phaseStartedElapsedMs` never moves.
  * 6. Background/foreground reconstruction reads this record only.
+ * 7. Playback content comes exclusively from `snapshot`; the source Routine is
+ *    never consulted after start (R019/R021).
+ *
+ * Field semantics:
+ * - `*ElapsedMs` values are monotonic ms since boot (`MonotonicClock`).
+ * - `updatedAtWallMs` is a real-world timestamp for display/age only; it never
+ *   influences countdowns, so a wall-clock jump cannot move the timer.
+ * - `bootCount` identifies the process/boot that owns the elapsed origin; a
+ *   mismatch means the elapsed values are meaningless and must not be used.
  */
 export interface ActiveSession {
   sessionId: string;
+  /** Provenance only. May point to a routine that has since been deleted. */
   routineId: string;
+  /** Display name captured at start; survives source rename/deletion. */
+  routineName: string;
+
   state: RunnerState;
   /**
-   * Index into the routine's ordered steps.
+   * Index into the snapshot's ordered steps.
    *
    * During a transition this is the index of the *upcoming* step, so the
    * runner can show "下一个" while the transition counts down.
    */
   currentStepIndex: number;
 
-  /** When the current phase (step or transition) started. `null` when idle. */
-  phaseStartedAtEpochMs: number | null;
-  /** Set while paused; cleared on resume. */
-  pausedAtEpochMs: number | null;
+  /** Monotonic ms when the current phase (step or transition) started. */
+  phaseStartedElapsedMs: number | null;
+  /** Monotonic ms at pause; null while running. */
+  pausedAtElapsedMs: number | null;
   /** Total completed pause time earlier in this routine. */
   accumulatedPauseMs: number;
 
@@ -39,20 +55,16 @@ export interface ActiveSession {
   /** Routine time already finished before the current phase. */
   completedPhaseMs: number;
 
-  updatedAtEpochMs: number;
-}
+  /** Monotonic ms of the last authoritative write; used for same-boot age. */
+  lastUpdatedElapsedMs: number;
+  /** Wall-clock ms of the last write; display/age only, never timing. */
+  updatedAtWallMs: number;
 
-export interface ActiveSessionInput {
-  sessionId: string;
-  routineId: string;
-  state: RunnerState;
-  currentStepIndex: number;
-  phaseStartedAtEpochMs: number | null;
-  pausedAtEpochMs: number | null;
-  accumulatedPauseMs: number;
-  effectiveStepDurationMs: number;
-  effectiveTransitionDurationMs: number;
-  runtimeExtensionMs: number;
-  completedPhaseMs: number;
-  updatedAtEpochMs: number;
+  /** Boot that owns the elapsed origin (`BootInfoProvider`). */
+  bootCount: number;
+
+  /** Version of the snapshot payload; validated on decode. */
+  snapshotVersion: number;
+  /** Immutable playback content captured at start. */
+  snapshot: ActiveSessionSnapshot;
 }

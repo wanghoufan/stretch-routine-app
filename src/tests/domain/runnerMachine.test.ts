@@ -13,16 +13,19 @@ function createHarness(steps: RoutineStep[], startAtMs = 0) {
   let session: ActiveSession = startRunner({
     sessionId: 'session-1',
     routineId: 'routine-1',
+    routineName: '测试流程',
     steps,
-    nowMs: startAtMs,
+    nowElapsedMs: startAtMs,
+    wallMs: 0,
+    bootCount: 1,
   }).session;
 
   return {
     get session() {
       return session;
     },
-    advance(nowMs: number): RunnerEvent[] {
-      const result = advanceRunner(session, steps, nowMs);
+    advance(nowElapsedMs: number): RunnerEvent[] {
+      const result = advanceRunner(session, steps, nowElapsedMs);
       session = result.session;
       return result.events;
     },
@@ -32,18 +35,34 @@ function createHarness(steps: RoutineStep[], startAtMs = 0) {
 describe('runner state machine — normal progression (T040)', () => {
   it('starts on the first step with a start cue', () => {
     const steps = makeSteps([['A', 10, 0]]);
-    const result = startRunner({ sessionId: 's', routineId: 'r', steps, nowMs: 5_000 });
+    const result = startRunner({
+      sessionId: 's',
+      routineId: 'r',
+      routineName: '流程',
+      steps,
+      nowElapsedMs: 5_000,
+      wallMs: 0,
+      bootCount: 1,
+    });
 
     expect(result.session.state).toBe('RUNNING_STEP');
     expect(result.session.currentStepIndex).toBe(0);
-    expect(result.session.phaseStartedAtEpochMs).toBe(5_000);
+    expect(result.session.phaseStartedElapsedMs).toBe(5_000);
     expect(result.events).toEqual([{ type: 'STEP_STARTED', stepIndex: 0, suppressed: false }]);
   });
 
   it('refuses to start an empty routine', () => {
-    expect(() => startRunner({ sessionId: 's', routineId: 'r', steps: [], nowMs: 0 })).toThrow(
-      '流程没有可播放的步骤',
-    );
+    expect(() =>
+      startRunner({
+        sessionId: 's',
+        routineId: 'r',
+        routineName: '流程',
+        steps: [],
+        nowElapsedMs: 0,
+        wallMs: 0,
+        bootCount: 1,
+      }),
+    ).toThrow('流程没有可播放的步骤');
   });
 
   it('completes a single-step routine exactly at its duration', () => {
@@ -55,7 +74,7 @@ describe('runner state machine — normal progression (T040)', () => {
 
     expect(harness.advance(10_000)).toEqual([{ type: 'COMPLETED' }]);
     expect(harness.session.state).toBe('COMPLETED');
-    expect(harness.session.phaseStartedAtEpochMs).toBeNull();
+    expect(harness.session.phaseStartedElapsedMs).toBeNull();
   });
 
   it('runs a multi-step routine through transitions in order', () => {
@@ -117,7 +136,7 @@ describe('runner state machine — normal progression (T040)', () => {
     harness.advance(12_000);
     expect(harness.session.currentStepIndex).toBe(1);
     expect(remainingMs(harness.session, 12_000)).toBe(8_000);
-    expect(harness.session.phaseStartedAtEpochMs).toBe(10_000);
+    expect(harness.session.phaseStartedElapsedMs).toBe(10_000);
   });
 
   it('resolves every boundary crossed during a long background gap', () => {
@@ -175,5 +194,15 @@ describe('runner state machine — normal progression (T040)', () => {
     expect(harness.session.completedPhaseMs).toBe(10_000);
     harness.advance(15_000);
     expect(harness.session.completedPhaseMs).toBe(15_000);
+  });
+
+  it('freezes the immutable snapshot at start and ignores later step mutation', () => {
+    const steps = makeSteps([['A', 10, 0]]);
+    const session = createHarness(steps).session;
+
+    expect(session.snapshot.steps[0]?.displayName).toBe('A');
+    // Mutating the source array after start must not leak into the session.
+    steps[0]!.displayName = 'MUTATED';
+    expect(session.snapshot.steps[0]?.displayName).toBe('A');
   });
 });

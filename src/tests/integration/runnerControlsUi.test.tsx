@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { screen } from '@testing-library/react-native';
 import { renderApp } from '../support/renderApp';
-import { createTestContext } from '../support/testContext';
+import { createTestContext, loadActiveSession } from '../support/testContext';
 import { createTestSpeaker } from '../support/fixtures';
 import { advanceTime, press } from '../support/interaction';
 
@@ -38,21 +38,21 @@ describe('US5 播放控制 (T053)', () => {
   it('pauses, freezes the countdown, and resumes', async () => {
     const { context } = await startTwoStepRoutine();
 
-    advanceTime(context.clock, context.ticker, 3_000);
+    advanceTime(context, 3_000);
     expect(screen.getByTestId('runner-remaining')).toHaveTextContent('0:07');
 
     await press('runner-pause');
     expect(screen.getByTestId('runner-paused')).toBeTruthy();
 
     // A whole minute passes while paused: nothing moves.
-    advanceTime(context.clock, context.ticker, 60_000);
+    advanceTime(context, 60_000);
     expect(screen.getByTestId('runner-remaining')).toHaveTextContent('0:07');
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('A');
 
     await press('runner-pause');
     expect(screen.queryByTestId('runner-paused')).toBeNull();
 
-    advanceTime(context.clock, context.ticker, 7_000);
+    advanceTime(context, 7_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('B');
 
     context.dispose();
@@ -61,7 +61,7 @@ describe('US5 播放控制 (T053)', () => {
   it('extends the current step by 10 seconds only', async () => {
     const { context } = await startTwoStepRoutine();
 
-    advanceTime(context.clock, context.ticker, 2_000);
+    advanceTime(context, 2_000);
     expect(screen.getByTestId('runner-remaining')).toHaveTextContent('0:08');
 
     await press('runner-add-time');
@@ -91,7 +91,7 @@ describe('US5 播放控制 (T053)', () => {
   it('restarts the previous step at its full duration', async () => {
     const { context } = await startTwoStepRoutine();
 
-    advanceTime(context.clock, context.ticker, 10_000);
+    advanceTime(context, 10_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('B');
     expect(screen.getByTestId('runner-remaining')).toHaveTextContent('0:10');
 
@@ -125,7 +125,7 @@ describe('US5 播放控制 (T053)', () => {
 
     expect(await screen.findByText('共 1 个流程')).toBeTruthy();
     // An ended routine leaves no session behind.
-    expect(await context.services.sessions.loadActive()).toBeNull();
+    expect(await loadActiveSession(context.services)).toBeNull();
 
     context.dispose();
   });
@@ -133,10 +133,10 @@ describe('US5 播放控制 (T053)', () => {
   it('persists the active session so a remount resumes the same step', async () => {
     const { context, seeded } = await startTwoStepRoutine();
 
-    advanceTime(context.clock, context.ticker, 12_000);
+    advanceTime(context, 12_000);
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('B');
 
-    const stored = await context.services.sessions.loadActive();
+    const stored = await loadActiveSession(context.services);
     expect(stored?.routineId).toBe(seeded.routine.id);
     expect(stored?.currentStepIndex).toBe(1);
     expect(stored?.state).toBe('RUNNING_STEP');
@@ -148,7 +148,7 @@ describe('US5 播放控制 (T053)', () => {
     renderApp({
       services: context.services,
       speaker: createTestSpeaker(),
-      initialRoute: { name: 'Runner', params: { routineId: seeded.routine.id } },
+      initialRoute: { name: 'Runner', params: undefined },
     });
 
     expect(await screen.findByTestId('runner-current-step')).toHaveTextContent('B');

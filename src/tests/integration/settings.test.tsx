@@ -127,7 +127,7 @@ describe('US7 设置 (T083/T084/T086)', () => {
     await press(`routine-start-${seeded.routine.id}`);
     await screen.findByTestId('runner-current-step');
 
-    advanceTime(context.clock, context.ticker, 10_000);
+    advanceTime(context, 10_000);
 
     // Timing still advances to step B, but nothing is spoken.
     expect(screen.getByTestId('runner-current-step')).toHaveTextContent('B');
@@ -158,7 +158,7 @@ describe('US7 设置 (T083/T084/T086)', () => {
     await screen.findByTestId('runner-current-step');
 
     // Cross into the 5 second window without crossing the step boundary.
-    advanceTime(context.clock, context.ticker, 26_000);
+    advanceTime(context, 26_000);
 
     expect(speaker.spoken).toEqual(['A，30秒', '4秒后结束']);
 

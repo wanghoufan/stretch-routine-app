@@ -17,8 +17,16 @@ const steps = makeSteps([
   ['C', 30, 0],
 ]);
 
-function start(nowMs = 0) {
-  return startRunner({ sessionId: 's1', routineId: 'r1', steps, nowMs }).session;
+function start(nowElapsedMs = 0) {
+  return startRunner({
+    sessionId: 's1',
+    routineId: 'r1',
+    routineName: '测试流程',
+    steps,
+    nowElapsedMs,
+    wallMs: 0,
+    bootCount: 1,
+  }).session;
 }
 
 describe('runner timing math (T038)', () => {
@@ -36,7 +44,7 @@ describe('runner timing math (T038)', () => {
   });
 
   it('freezes elapsed time while paused regardless of real time passing', () => {
-    const session = { ...start(0), state: 'PAUSED_STEP' as const, pausedAtEpochMs: 3_000 };
+    const session = { ...start(0), state: 'PAUSED_STEP' as const, pausedAtElapsedMs: 3_000 };
     expect(phaseElapsedMs(session, 3_000)).toBe(3_000);
     expect(phaseElapsedMs(session, 303_000)).toBe(3_000);
     expect(remainingMs(session, 303_000)).toBe(7_000);

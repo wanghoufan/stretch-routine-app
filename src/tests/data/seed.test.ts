@@ -1,8 +1,15 @@
-import { SEED_ACTIONS, SEED_ROUTINES, SEED_VERSION, SEED_VERSION_KEY, runSeeds } from '../../data/seeds';
+import {
+  SEED_ACTIONS,
+  SEED_ROUTINES,
+  SEED_VERSION,
+  SEED_VERSION_KEY,
+  repairSeededRoutines,
+  runSeeds,
+} from '../../data/seeds';
 import { createActionRepository } from '../../data/repositories/actionRepository';
 import { createRoutineRepository } from '../../data/repositories/routineRepository';
 import { runMigrations } from '../../data/migrations';
-import { FakeClock } from '../../services/clock/Clock';
+import { FakeClock } from '../../services/clock';
 import { createSequentialIdGenerator } from '../../shared/utils/id';
 import { createNodeSqlDatabase, type NodeSqlDatabase } from '../support/nodeSqlDatabase';
 
@@ -209,6 +216,130 @@ describe('first-launch seed library (TASK-005)', () => {
       SEED_VERSION_KEY,
     ]);
     expect(marker?.value).toBe(String(SEED_VERSION));
+
+    db.close();
+  });
+});
+
+describe('seed repair pass (TASK-009)', () => {
+  it('restores only the missing shipped routine and leaves user data untouched', async () => {
+    const { db, clock } = setup();
+    await runMigrations(db);
+
+    const generateId = createSequentialIdGenerator();
+    const actions = createActionRepository({ db, clock, generateId });
+    const routines = createRoutineRepository({ db, clock, generateId });
+
+    await runSeeds({ db, clock, generateId });
+
+    // User adds their own content on top of the seeded library.
+    const ownAction = await actions.create({ name: '我的动作', defaultDurationSec: 45, sideMode: 'single' });
+    const ownRoutine = await routines.create({
+      name: '我的流程',
+      defaultDurationSec: 20,
+      defaultTransitionSec: 0,
+      steps: [{ displayName: '我的动作', durationSec: 20, transitionSec: 0 }],
+    });
+
+    // The reported bug: the second shipped routine disappears.
+    const evening = (await routines.list()).find((routine) => routine.name === '跑后下肢放松');
+    expect(evening).toBeDefined();
+    await routines.remove(evening!.id);
+    expect(await count(db, 'routines')).toBe(2);
+
+    const result = await repairSeededRoutines({ db, clock, generateId });
+    expect(result.outcome).toBe('repaired');
+    expect(result.restoredRoutineNames).toEqual(['跑后下肢放松']);
+
+    // Everything is back without duplicating what was still there.
+    const summaries = await routines.listSummaries();
+    expect(summaries.map((summary) => summary.name).sort()).toEqual(
+      [...SEED_ROUTINES.map((definition) => definition.name), '我的流程'].sort(),
+    );
+    const restored = summaries.find((summary) => summary.name === '跑后下肢放松');
+    expect(restored?.stepCount).toBe(9);
+    expect(restored?.totalDurationSec).toBe(310);
+    const morning = summaries.find((summary) => summary.name === '晨起全身拉伸');
+    expect(morning?.stepCount).toBe(10);
+
+    const loadedRestored = await routines.getWithSteps(restored!.id);
+    expect(loadedRestored?.steps.map((step) => step.displayName)).toEqual([
+      '站姿股四头肌拉伸（左）',
+      '站姿股四头肌拉伸（右）',
+      '坐姿腿后肌拉伸（左）',
+      '坐姿腿后肌拉伸（右）',
+      '站姿小腿拉伸（左）',
+      '站姿小腿拉伸（右）',
+      '跪姿髋屈肌拉伸（左）',
+      '跪姿髋屈肌拉伸（右）',
+      '蝴蝶式坐姿',
+    ]);
+    // Restored steps still point back at the seeded library actions.
+    const seedActionIds = new Set(
+      (await actions.list()).map((action) => action.id),
+    );
+    expect(
+      loadedRestored?.steps.every(
+        (step) => Boolean(step.sourceActionId) && seedActionIds.has(step.sourceActionId!),
+      ),
+    ).toBe(true);
+
+    // User-owned data survived verbatim.
+    expect(await count(db, 'actions')).toBe(15);
+    expect(await count(db, 'routines')).toBe(3);
+    expect((await actions.getById(ownAction.id))?.name).toBe('我的动作');
+    expect((await routines.getById(ownRoutine.routine.id))?.name).toBe('我的流程');
+    const ownWithSteps = await routines.getWithSteps(ownRoutine.routine.id);
+    expect(ownWithSteps?.steps.map((step) => step.displayName)).toEqual(['我的动作']);
+
+    // Repair does not bump the seed marker, so it can run again on next boot.
+    const marker = await db.get<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', [
+      SEED_VERSION_KEY,
+    ]);
+    expect(marker?.value).toBe(String(SEED_VERSION));
+
+    db.close();
+  });
+
+  it('is a no-op once every shipped routine is present', async () => {
+    const { db, clock } = setup();
+    await runMigrations(db);
+
+    await runSeeds({ db, clock, generateId: createSequentialIdGenerator() });
+    const before = {
+      actions: await count(db, 'actions'),
+      routines: await count(db, 'routines'),
+      steps: await count(db, 'routine_steps'),
+    };
+
+    const result = await repairSeededRoutines({ db, clock, generateId: createSequentialIdGenerator() });
+    expect(result).toEqual({ outcome: 'intact', restoredRoutineNames: [] });
+    expect(await count(db, 'actions')).toBe(before.actions);
+    expect(await count(db, 'routines')).toBe(before.routines);
+    expect(await count(db, 'routine_steps')).toBe(before.steps);
+
+    db.close();
+  });
+
+  it('never injects seed content into a library that was never seeded', async () => {
+    const { db, clock } = setup();
+    await runMigrations(db);
+
+    const actions = createActionRepository({ db, clock, generateId: createSequentialIdGenerator() });
+    const routines = createRoutineRepository({ db, clock, generateId: createSequentialIdGenerator() });
+    await actions.create({ name: '我的动作', defaultDurationSec: 45, sideMode: 'single' });
+    await routines.create({
+      name: '我的流程',
+      defaultDurationSec: 20,
+      defaultTransitionSec: 0,
+      steps: [{ displayName: '我的动作', durationSec: 20, transitionSec: 0 }],
+    });
+
+    const result = await repairSeededRoutines({ db, clock, generateId: createSequentialIdGenerator() });
+    expect(result).toEqual({ outcome: 'not-applicable', restoredRoutineNames: [] });
+    expect(await count(db, 'actions')).toBe(1);
+    expect(await count(db, 'routines')).toBe(1);
+    expect(await count(db, 'routine_steps')).toBe(1);
 
     db.close();
   });

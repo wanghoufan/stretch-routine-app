@@ -1,19 +1,36 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
-import type { FakeClock } from '../../services/clock/Clock';
+import type { FakeClock } from '../../services/clock';
+import type { FakeMonotonicClock } from '../../services/clock';
 import type { ManualTicker } from '../../services/ticker/ticker';
 
 /**
  * Shared helpers for screen-level integration tests.
  *
  * The app under test is the real navigator with the real providers, backed by a
- * real in-memory SQLite database, a fake clock and a manual ticker.
+ * real in-memory SQLite database, fake clocks and a manual ticker.
  */
 
-/** Move fake time forward and let the runner observe the new time. */
-export function advanceTime(clock: FakeClock, ticker: ManualTicker, ms: number): void {
+/** Anything that can move time: the test context satisfies this. */
+export interface Timeline {
+  /** Wall clock (createdAt / display). */
+  clock: FakeClock;
+  /** Monotonic runner clock (authoritative countdown). */
+  monotonic: FakeMonotonicClock;
+  ticker: ManualTicker;
+}
+
+/**
+ * Move fake time forward and let the runner observe the new time.
+ *
+ * Both clocks advance together so the test models "real time passed": the wall
+ * clock for display and the monotonic clock for the countdown. Tests that need
+ * to prove a *wall jump* does not affect timing use `clock.set()` directly.
+ */
+export function advanceTime(timeline: Timeline, ms: number): void {
   act(() => {
-    clock.advance(ms);
-    ticker.fire();
+    timeline.clock.advance(ms);
+    timeline.monotonic.advance(ms);
+    timeline.ticker.fire();
   });
 }
 

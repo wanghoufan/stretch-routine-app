@@ -13,13 +13,13 @@ import { useRunnerLifecycle } from './useRunnerLifecycle';
 import type { RunnerControl } from '../domain/runnerMachine';
 
 /**
- * React binding for the runner (T042).
+ * React binding for the runner (R019).
  *
- * The hook owns no timing logic: it wires the controller to the ticker, to app
- * visibility, and to the current settings, then exposes an immutable view.
+ * The hook owns no timing logic and no routine id: it wires the controller to
+ * the stored ActiveSession, the ticker, app visibility and the current
+ * settings, then exposes an immutable view.
  */
 export interface UseRunnerOptions {
-  routineId: string;
   /** Injectable for tests / non-device targets. */
   visibilitySource?: AppVisibilitySource;
 }
@@ -33,8 +33,7 @@ export interface UseRunnerResult {
   end: () => void;
 }
 
-export function useRunner(options: UseRunnerOptions): UseRunnerResult {
-  const { routineId } = options;
+export function useRunner(options: UseRunnerOptions = {}): UseRunnerResult {
   const services = useServices();
   const { settings } = useSettings();
   const { tts } = useSpeech();
@@ -50,18 +49,17 @@ export function useRunner(options: UseRunnerOptions): UseRunnerResult {
   const controller = useMemo(() => {
     const persistence = createSessionPersistence({
       repository: services.sessions,
-      now: () => services.clock.nowMs(),
+      wallClock: services.wallClock,
     });
     return new RunnerController({
-      routineId,
-      routines: services.routines,
       persistence,
-      clock: services.clock,
+      monotonic: services.monotonic,
+      bootInfo: services.bootInfo,
+      termination: services.termination,
       tts,
       settings: settingsRef.current,
-      generateId: services.generateId,
     });
-  }, [routineId, services, tts]);
+  }, [services, tts]);
 
   useEffect(() => {
     void controller.load();
