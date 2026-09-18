@@ -1,25 +1,26 @@
 # HANDOFF｜拉伸语音播报App V1开发
 
-- Captured at（YYYY-MM-DD HH:MM）：2026-09-18 11:00
+- Captured at（YYYY-MM-DD HH:MM）：2026-09-18 23:10（大交接冻结版）
 - PROJECT_PHASE：DEVELOP（DEV_BASELINE=PRODUCT_PLAN_V1.2，PLAN_GATE=APPROVED）
 - PLAN_VERSION：PRODUCT_PLAN_V1.2
 - PLAN_READINESS_SCORE：94
 - PLAN_GATE：APPROVED
 - DEV_BASELINE：PRODUCT_PLAN_V1.2
 - CHANGE_REQUEST：B（TASK-011倒计时背景音 characterizing + TASK-014动作库分组筛选，均为局部功能新增；Requirement/DoD见任务备注B-2/B-3，不召Planner，DEV_BASELINE仍为PRODUCT_PLAN_V1.2）
-- 推送排期：用户要求功能完成后打包推手机；EAS免费额度10-01恢复，在此之前Expo Go验证，10-01当天EAS preview打包+adb安装（TASK-015，已排期）。
+- 推送排期：本地构建链已授权启用（JDK17+SDK用户目录安装，expo run:android release / eas build --local，不耗EAS额度），releases/stretch-routine-v1.1.0-local.apk已出包；EAS免费额度10-01恢复仅为备用通道（TASK-015）。
 - 任务备注B-2（背景音局部Requirement，用户2026-09-18修订：自然音三段替换为三首轻音乐）：①设置页“倒计时背景音”5选1（无声/滴答/轻音乐·晨曦/轻音乐·静夜/轻音乐·空山，默认滴答）；②背景音仅在RUNNING_STEP/TRANSITION播放，暂停/结束/完成即停；③TTS播报时背景音不掐断计时、不吞cue（音量 coexistence，有条件duck）；④音频本地打包离线可用、有出处license记录；⑤DoD：5选项切换单测+启停跟随状态机测试+真机 sandwich（Expo Go）验证；⑥用户终验通过后10-01 EAS preview打包adb装机（额度所限，之前不承诺APK推送）。
 - Stage ID（本阶段叫什么）：stretch-app-v11-ambient
 - 剩 P0（没完的才列，多一条都不行）：
-  - P0-5：native R004-R006/R022-R034待构建通道（EAS额度10-01恢复），Wave1纯JS部分已收工
-- 当前 Task（正干到哪）（累计打回 n/2，supervisor每次打回时TM同步更新）：TASK-007 Wave1与TASK-009种子修复技术PASS待supervisor重检（各打回1/2：均为补账本，技术未否决，未达升级线）
-- 执行链/Session（可选，仅真 resume 通道填，普通 subagent 可空；TM 只记录/引用，ID 由基础设施返回，不手造、不要求用户复制；返工确认是否原链；senior 升级开新链后更新）：builder已按用户生效指令切opencode通道（opencode-go/deepseek-v4.1-flash，TASK-009首派PASS即真调验证通过；旧codebuddy通道作废）；qa=true codex/gpt-5.6-luna本窗口adb直驱；TASK-MODEL-LOG 13行、DISPATCH-LOG 17行齐备互验
+  - P0-5：native R004-R006/R022-R034（FGS/Doze/矩阵）待排期；本地构建链已通，可随时开工
+- 当前 Task（正干到哪）：开发暂停（用户喊停收工）。已收工：Wave1纯JS hardening＋背景音5选1（无声/滴答/三首合成轻音乐）＋种子V2（59动作/9模板/标签）＋动作库分组筛选＋本地release出包＋三台真机装机验证；supervisor最后一次PASS为Wave1，其后小任务走builder→reviewer→QA直通（P0=0）
+- 下一步（Next Single Action）：①三台手机（xagapro=Note11T Pro开发机/ruby=Note12/pearl=Note12T Pro）均已装releases/stretch-routine-v1.1.0-local.apk；②新手机装机直接adb装该包（HyperOS确认框等倒计时走完再点继续安装）；③恢复开发优先项：背景音试听按钮（TASK-017已挂起）、native hardening（R004起）、Google TTS替代Sherpa（可选）
+- 执行链/Session（可选，仅真 resume 通道填，普通 subagent 可空；TM 只记录/引用，ID 由基础设施返回，不手造、不要求用户复制；返工确认是否原链；senior 升级开新链后更新）：builder已按用户生效指令切opencode通道（opencode-go/deepseek-v4.1-flash，TASK-009首派PASS即真调验证通过；旧codebuddy通道作废）；qa=true codex/gpt-5.6-luna本窗口adb直驱；TASK-MODEL-LOG 14行、DISPATCH-LOG 21行齐备互验
 - 未闭环评审意见（code-reviewer/qa 留的还没改的）：Wave1两review均P0=0无遗留；V1.0遗留P1-1（后台到期cue不补播）转V1.1 R025-R028实测，P1-2已确认符合US7保持现状；QA的WAVE1-SEED-001已CLOSED；均不阻塞
-- docs 落盘清单（本轮新增/改了哪几个 docs 文件）：docs/handoff/HANDOFF.md（Wave1对齐，DEV_BASELINE单写V1.2）；docs/pm/PRODUCT_PLAN_V1.1.md + PRODUCT_PLAN_V1.2.md；docs/review/RESEARCH_REVIEW-V1.1-R1.md + RESEARCH_REVIEW-V1.2-R2.md + CODE_REVIEW-v11-wave1.md + CODE_REVIEW-seed-repair.md；docs/qa/v1.1-baseline.md + v11-wave1-functional.md；docs/model/TASK-MODEL-LOG.jsonl（13行）+DISPATCH-LOG.jsonl（17行）
-- 下一步（Next Single Action）：Wave1收工；native R004-R006/R022-R034待构建通道（EAS 10-01），通道可用后派builder继续
-- 人要拍什么板（列出来问，不问不许开工）：无——用户已授权“中间不要问不要停，小问题自己解决，不行挂账，完成后推送到手机”；本轮APK已装机（com.stretchroutine.v1 v1.0.0），语音实测待用户睡醒后配合
+- docs 落盘清单（本轮新增/改了哪几个 docs 文件）：docs/handoff/HANDOFF.md（Wave1对齐，DEV_BASELINE单写V1.2）；docs/pm/PRODUCT_PLAN_V1.1.md + PRODUCT_PLAN_V1.2.md；docs/review/RESEARCH_REVIEW-V1.1-R1.md + RESEARCH_REVIEW-V1.2-R2.md + CODE_REVIEW-v11-wave1.md + CODE_REVIEW-seed-repair.md + CODE_REVIEW-v11-ambient-seedv2.md + CODE_REVIEW-library-filter.md + CODE_REVIEW-light-music.md + CODE_REVIEW-2026-09-17.md + CODE_REVIEW-2026-09-18-seed.md；docs/qa/v1.1-baseline.md + v11-wave1-functional.md + v11-filter-ambient.md + android-v1-silent-install.md + android-background-spike.md + android-tts-spike.md；docs/model/TASK-MODEL-LOG.jsonl（14行）+DISPATCH-LOG.jsonl（21行）
+- 下一步（Next Single Action）：见“当前Task”下一步①②③（已收工冻结，恢复开发时读此三项）
+- 人要拍什么板（列出来问，不问不许开工）：无。用户口令集：继续开发 / 变更请求：…… / 第一阶段，计划 / 第二阶段，开发 / commit+push 需明确指令；EAS/付费/环境改动类事项需用户批（本地JDK/SDK链已批过）；不擅自关用户他服务、不改端口外服务
 - permission_request：无
-- 收尾记一笔：2026-09-18 neat收工：仓内无残留（releases/APK与android/已忽略留磁盘，专为后两台手机装机）；HANDOFF/账本对齐；Wave1+背景音+种子V2+筛选+轻音乐均收工，native待10-01
+- 收尾记一笔：2026-09-18大交接冻结：neat对齐完成；账本TASK-MODEL-LOG 19行；main已推远端；releases/APK与android/留磁盘且git忽略；node_modules/.expo未碰
 
 ## 恢复读盘（全体系唯一顺序，别乱）
 
