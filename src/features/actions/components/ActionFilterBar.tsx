@@ -1,31 +1,38 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, MIN_TOUCH_SIZE, radius, spacing } from '../../../shared/theme';
-import { DIFFICULTY_FILTERS, type DifficultyFilter } from '../services/actionGroups';
+import type { ActionScene, BodyPartChip, BodyPartFilter } from '../services/actionGroups';
 
 /**
- * Action library top filter bar (TASK-014, B-3).
+ * Action library top filter bar (TASK-014 B-3, TASK-018 B-4).
  *
- * A single-choice difficulty chip row plus a name search box. Both are plain
- * controlled inputs: the screen owns the filter state so it can combine them
- * with the grouping rules.
+ * A name search box plus single-choice body-part chips for the active scene
+ * (HD-1=A). Both are plain controlled inputs: the screen owns the state so it
+ * can combine the global search with the active-scene body-part pick.
  */
 export function ActionFilterBar({
-  difficulty,
   query,
-  onDifficultyChange,
   onQueryChange,
+  activeScene,
+  activeSceneEmpty,
+  bodyPart,
+  bodyPartChips,
+  onBodyPartChange,
 }: {
-  difficulty: DifficultyFilter;
   query: string;
-  onDifficultyChange: (next: DifficultyFilter) => void;
   onQueryChange: (next: string) => void;
+  activeScene: ActionScene;
+  /** True when the active scene currently has no matching card on screen. */
+  activeSceneEmpty: boolean;
+  bodyPart: BodyPartFilter;
+  bodyPartChips: readonly BodyPartChip[];
+  onBodyPartChange: (next: BodyPartFilter) => void;
 }) {
   return (
     <View style={styles.container}>
       <TextInput
         testID="library-search"
         accessibilityLabel="搜索动作名称"
-        accessibilityHint="输入名称关键词过滤动作"
+        accessibilityHint="输入名称关键词过滤所有场景的动作"
         placeholder="搜索动作名称"
         placeholderTextColor={colors.textMuted}
         value={query}
@@ -36,20 +43,23 @@ export function ActionFilterBar({
 
       <View
         style={styles.chips}
-        testID="library-filter-chips"
+        testID={`library-bodypart-chips-${activeScene}`}
         accessibilityRole="radiogroup"
-        accessibilityLabel="按难度筛选"
+        accessibilityLabel={`筛选${activeScene}部位`}
       >
-        {DIFFICULTY_FILTERS.map((option) => {
-          const selected = option === difficulty;
+        <Text style={styles.chipsSceneLabel} maxFontSizeMultiplier={1.5}>
+          {`${activeScene}部位${activeSceneEmpty ? '（当前无匹配）' : ''}`}
+        </Text>
+        {bodyPartChips.map((chip) => {
+          const selected = chip.key === bodyPart;
           return (
             <Pressable
-              key={option}
-              testID={`filter-difficulty-${option}`}
-              onPress={() => onDifficultyChange(option)}
+              key={chip.key}
+              testID={`filter-bodypart-${chip.key}`}
+              onPress={() => onBodyPartChange(chip.key)}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              accessibilityLabel={option === '全部' ? '难度全部' : `难度${option}`}
+              accessibilityLabel={`${activeScene}部位：${chip.key}`}
               style={({ pressed }) => [
                 styles.chip,
                 selected ? styles.chipSelected : null,
@@ -60,7 +70,7 @@ export function ActionFilterBar({
                 style={[styles.chipLabel, selected ? styles.chipLabelSelected : null]}
                 maxFontSizeMultiplier={1.4}
               >
-                {option}
+                {chip.key}
               </Text>
             </Pressable>
           );
@@ -91,8 +101,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
+  chipsSceneLabel: {
+    width: '100%',
+    fontSize: 13,
+    color: colors.textMuted,
+  },
   chip: {
-    minHeight: 36,
+    minHeight: MIN_TOUCH_SIZE,
+    minWidth: MIN_TOUCH_SIZE,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,

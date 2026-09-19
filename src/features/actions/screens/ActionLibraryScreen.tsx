@@ -12,9 +12,13 @@ import { colors, radius, spacing } from '../../../shared/theme';
 import { ActionEditor, type ActionEditorValues } from '../components/ActionEditor';
 import { ActionFilterBar } from '../components/ActionFilterBar';
 import {
+  ACTION_SCENES,
+  bodyPartChipsForScene,
   DEFAULT_ACTION_FILTERS,
   groupActions,
+  resolveBodyPartFilter,
   type ActionFilters,
+  type ActionScene,
   type ActionSceneGroup,
 } from '../services/actionGroups';
 import {
@@ -30,9 +34,11 @@ import { buildDeleteActionMessage, countActionUsage, deleteAction } from '../ser
  * Routines never read from here during playback: they use their own step
  * snapshots, which is why editing or deleting an Action is safe.
  *
- * The list is grouped by 场景 (拉伸/热身/核心训练) with a second 部位 level under
- * 拉伸, and a top filter bar narrows it by difficulty + name. Collapse choices
- * are remembered while filtering; the default is one open group.
+ * The list is grouped by 场景 (拉伸/热身/核心训练), all flat. The active scene is
+ * the target of the body-part chips (默认拉伸); tapping another scene's header
+ * claims it and keeps it expanded, while tapping the active scene toggles it.
+ * The search box filters every scene by name. Selecting a body part never
+ * force-opens another group.
  */
 export function ActionLibraryScreen() {
   const services = useServices();
@@ -44,6 +50,7 @@ export function ActionLibraryScreen() {
   const [editing, setEditing] = useState<Action | null>(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ActionFilters>(DEFAULT_ACTION_FILTERS);
+  const [activeScene, setActiveScene] = useState<ActionScene>(ACTION_SCENES[0]);
   const [expandedOverrides, setExpandedOverrides] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async () => {
@@ -61,17 +68,49 @@ export function ActionLibraryScreen() {
     void refresh();
   }, [refresh]);
 
-  const groups = useMemo(() => groupActions(actions, filters), [actions, filters]);
-  const filtersActive = filters.difficulty !== '全部' || filters.query.trim().length > 0;
-  const firstGroupKey = groups[0]?.key ?? null;
-  // Default: only the first group is open, but an active filter/search opens
-  // every remaining group so the hits are visible. Explicit user toggles win
-  // and are remembered across filter changes.
+  const groups = useMemo(
+    () => groupActions(actions, filters, activeScene),
+    [actions, filters, activeScene],
+  );
+  const bodyPartChips = useMemo(
+    () => bodyPartChipsForScene(actions, activeScene),
+    [actions, activeScene],
+  );
+  // Search opens every remaining group so hits are visible. The body-part pick
+  // must not, so it is deliberately excluded from this flag.
+  const searchActive = filters.query.trim().length > 0;
+  // The default open group is fixed to the first scene (拉伸) and never drifts
+  // with the active scene, so expanding another group keeps this one open.
+  const defaultOpenKey = `library-group-${ACTION_SCENES[0]}`;
   const isExpanded = (key: string) =>
-    expandedOverrides[key] ?? (filtersActive || key === firstGroupKey);
-  const toggleGroup = (key: string) => {
+    expandedOverrides[key] ?? (searchActive || key === defaultOpenKey);
+  // Tapping any other scene's header claims it for the chips right away (and
+  // keeps it expanded this tap); tapping the current active scene toggles it.
+  const toggleGroup = (scene: ActionScene, key: string) => {
+    if (scene !== activeScene) {
+      setActiveScene(scene);
+      setFilters((previous) =>
+        previous.bodyPart === DEFAULT_ACTION_FILTERS.bodyPart
+          ? previous
+          : { ...previous, bodyPart: DEFAULT_ACTION_FILTERS.bodyPart },
+      );
+      setExpandedOverrides((previous) =>
+        previous[key] ? previous : { ...previous, [key]: true },
+      );
+      return;
+    }
     setExpandedOverrides((previous) => ({ ...previous, [key]: !isExpanded(key) }));
   };
+  const activeSceneEmpty = !groups.some((group) => group.scene === activeScene);
+
+  // A refresh can remove the selected part; fall back to 全部 rather than keep
+  // a hidden selection with no matching chip.
+  useEffect(() => {
+    setFilters((previous) => {
+      const bodyPart = resolveBodyPartFilter(previous.bodyPart, bodyPartChips);
+      return bodyPart === previous.bodyPart ? previous : { ...previous, bodyPart };
+    });
+  }, [bodyPartChips]);
 
   const submit = useCallback(
     async (values: ActionEditorValues) => {
@@ -149,7 +188,7 @@ export function ActionLibraryScreen() {
       <View key={group.key}>
         <Pressable
           testID={group.key}
-          onPress={() => toggleGroup(group.key)}
+          onPress={() => toggleGroup(group.scene, group.key)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={`${group.scene}，${group.count}个动作`}
@@ -171,18 +210,7 @@ export function ActionLibraryScreen() {
           </Text>
         </Pressable>
 
-        {expanded
-          ? group.bodyParts.length > 0
-            ? group.bodyParts.map((part) => (
-                <View key={part.key} testID={`library-subgroup-${part.key}`}>
-                  <Text style={styles.subGroupTitle} maxFontSizeMultiplier={1.5}>
-                    {part.key}（{part.count}）
-                  </Text>
-                  {part.actions.map(renderAction)}
-                </View>
-              ))
-            : group.actions.map(renderAction)
-          : null}
+        {expanded ? group.actions.map(renderAction) : null}
       </View>
     );
   };
@@ -219,10 +247,13 @@ export function ActionLibraryScreen() {
       {!loading && actions.length > 0 ? (
         <>
           <ActionFilterBar
-            difficulty={filters.difficulty}
             query={filters.query}
-            onDifficultyChange={(difficulty) => setFilters((previous) => ({ ...previous, difficulty }))}
             onQueryChange={(query) => setFilters((previous) => ({ ...previous, query }))}
+            activeScene={activeScene}
+            activeSceneEmpty={activeSceneEmpty}
+            bodyPart={filters.bodyPart}
+            bodyPartChips={bodyPartChips}
+            onBodyPartChange={(bodyPart) => setFilters((previous) => ({ ...previous, bodyPart }))}
           />
 
           {groups.length === 0 ? (
@@ -231,7 +262,7 @@ export function ActionLibraryScreen() {
                 没有符合条件的动作
               </Text>
               <Text style={styles.emptyResultDescription} maxFontSizeMultiplier={1.5}>
-                换个难度或清空搜索词再试试。
+                换个部位，或清空搜索词再试试。
               </Text>
               <AppButton
                 label="清除筛选"
@@ -309,13 +340,6 @@ const styles = StyleSheet.create({
   },
   groupChevron: {
     fontSize: 13,
-    color: colors.textMuted,
-  },
-  subGroupTitle: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    fontSize: 15,
-    fontWeight: '600',
     color: colors.textMuted,
   },
   emptyResult: {
