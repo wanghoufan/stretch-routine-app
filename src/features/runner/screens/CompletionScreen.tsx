@@ -4,6 +4,8 @@ import { formatDuration } from '../../../shared/utils/format';
 import { AppButton } from '../../../shared/components/AppButton';
 import { Card } from '../../../shared/components/Layout';
 import { Screen } from '../../../shared/components/Screen';
+import { ActionIconTile } from '../../../shared/components/ActionIconTile';
+import { actionIconFor } from '../../../shared/assets/actionIcons';
 import { colors, fontSizes, spacing } from '../../../shared/theme';
 
 /** Minimal completion screen (T045, SPEC US1 scenario 5, PLAN §11 F). */
@@ -16,6 +18,7 @@ export function CompletionScreen() {
   return (
     <Screen title="完成" scroll={false}>
       <Card style={styles.card}>
+        <ActionIconTile source={actionIconFor(params.routineName)} size={88} style={styles.heroTile} />
         <Text style={styles.title} maxFontSizeMultiplier={1.4} accessibilityRole="header">
           流程完成
         </Text>
@@ -43,6 +46,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xl,
     marginTop: spacing.lg,
+  },
+  heroTile: {
+    marginBottom: spacing.md,
   },
   title: {
     fontSize: fontSizes.title,

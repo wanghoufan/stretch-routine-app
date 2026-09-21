@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, fontSizes, spacing } from '../theme';
+import { colors, fontSizes, radius, spacing } from '../theme';
 import { AppButton } from './AppButton';
 
 /** Standard screen scaffold: background, gutter, optional scroll content. */
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,

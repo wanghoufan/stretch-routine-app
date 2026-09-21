@@ -11,6 +11,8 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { Card, SectionTitle } from '../../../shared/components/Layout';
 import { NoticeBanner } from '../../../shared/components/NoticeBanner';
 import { Screen } from '../../../shared/components/Screen';
+import { ActionIconTile } from '../../../shared/components/ActionIconTile';
+import { actionIconFor } from '../../../shared/assets/actionIcons';
 import { colors, spacing } from '../../../shared/theme';
 import { buildDeleteRoutineMessage, deleteRoutine } from '../services/deleteRoutine';
 import { duplicateRoutine } from '../services/duplicateRoutine';
@@ -112,12 +114,17 @@ export function RoutineDetailScreen() {
   return (
     <Screen title="流程详情" onBack={navigation.goBack}>
       <Card>
-        <Text style={styles.name} maxFontSizeMultiplier={1.5} accessibilityRole="header">
-          {loaded.routine.name}
-        </Text>
-        <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
-          {`${loaded.steps.length} 个动作 · 约 ${formatDuration(total)}`}
-        </Text>
+        <View style={styles.heroRow}>
+          <ActionIconTile source={actionIconFor(loaded.routine.name)} size={72} />
+          <View style={styles.heroInfo}>
+            <Text style={styles.name} maxFontSizeMultiplier={1.5} accessibilityRole="header">
+              {loaded.routine.name}
+            </Text>
+            <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
+              {`${loaded.steps.length} 个动作 · 约 ${formatDuration(total)}`}
+            </Text>
+          </View>
+        </View>
       </Card>
 
       <AppButton
@@ -170,12 +177,17 @@ export function RoutineDetailScreen() {
       <SectionTitle>动作顺序</SectionTitle>
       {loaded.steps.map((step, index) => (
         <Card key={step.id}>
-          <Text style={styles.stepName} maxFontSizeMultiplier={1.5}>
-            {`${index + 1}. ${step.displayName}`}
-          </Text>
-          <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
-            {`${formatDuration(step.durationSec)} · 过渡 ${formatDuration(step.transitionSec)}`}
-          </Text>
+          <View style={styles.stepRow}>
+            <ActionIconTile source={actionIconFor(step.displayName)} size={48} />
+            <View style={styles.stepInfo}>
+              <Text style={styles.stepName} maxFontSizeMultiplier={1.5}>
+                {`${index + 1}. ${step.displayName}`}
+              </Text>
+              <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
+                {`${formatDuration(step.durationSec)} · 过渡 ${formatDuration(step.transitionSec)}`}
+              </Text>
+            </View>
+          </View>
         </Card>
       ))}
     </Screen>
@@ -183,10 +195,26 @@ export function RoutineDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  heroRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  heroInfo: {
+    flex: 1,
+  },
   name: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.text,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  stepInfo: {
+    flex: 1,
   },
   meta: {
     marginTop: spacing.xs,

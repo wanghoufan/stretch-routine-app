@@ -1,20 +1,22 @@
-/** Shared visual tokens. Kept tiny on purpose (Constitution §3.1). */
+/** Shared visual tokens. Motion Core V1 dark theme (pure UI reskin). */
 
 export const colors = {
-  background: '#F5F7FA',
-  surface: '#FFFFFF',
-  border: '#DDE3EC',
-  text: '#111827',
-  textMuted: '#5B6472',
-  primary: '#1D6FE0',
-  primaryPressed: '#1557B0',
-  onPrimary: '#FFFFFF',
-  danger: '#B3261E',
-  dangerSoft: '#FDECEA',
-  accentSoft: '#E8F0FE',
-  warningSoft: '#FEF3C7',
-  warningText: '#8A5B00',
-  success: '#1B7F5A',
+  background: '#041B3D',
+  surface: '#0D274A',
+  border: '#1B5B91',
+  text: '#FFFFFF',
+  textMuted: '#9BB3D1',
+  primary: '#00E5FF',
+  primaryPressed: '#0EA5FF',
+  onPrimary: '#041B3D',
+  danger: '#FF6B6B',
+  dangerSoft: '#402129',
+  accentSoft: '#123A63',
+  warningSoft: '#3A2E12',
+  warningText: '#FFC857',
+  success: '#00D4A6',
+  /** Rounded icon-tile background (teal tile behind cyan glyphs). */
+  iconTile: '#0C3D63',
 } as const;
 
 export const spacing = {
@@ -23,12 +25,13 @@ export const spacing = {
   md: 12,
   lg: 16,
   xl: 24,
+  xxl: 32,
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 18,
+  sm: 10,
+  md: 16,
+  lg: 22,
 } as const;
 
 /** Android accessibility guidance: primary targets are at least 48dp. */

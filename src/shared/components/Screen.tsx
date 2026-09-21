@@ -26,6 +26,7 @@ export function Screen({
 }) {
   return (
     <View style={styles.safe}>
+      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         {onBack ? (
           <AppButton

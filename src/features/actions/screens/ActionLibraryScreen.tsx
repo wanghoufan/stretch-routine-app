@@ -8,6 +8,8 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { Card, EmptyState } from '../../../shared/components/Layout';
 import { NoticeBanner } from '../../../shared/components/NoticeBanner';
 import { Screen } from '../../../shared/components/Screen';
+import { ActionIconTile } from '../../../shared/components/ActionIconTile';
+import { actionIconFor } from '../../../shared/assets/actionIcons';
 import { colors, radius, spacing } from '../../../shared/theme';
 import { ActionEditor, type ActionEditorValues } from '../components/ActionEditor';
 import { ActionFilterBar } from '../components/ActionFilterBar';
@@ -154,12 +156,17 @@ export function ActionLibraryScreen() {
 
   const renderAction = (action: Action) => (
     <Card key={action.id}>
-      <Text style={styles.name} maxFontSizeMultiplier={1.5}>
-        {action.name}
-      </Text>
-      <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
-        {`${action.sideMode === 'bilateral' ? '左右配对' : '单侧'} · 默认 ${formatDuration(action.defaultDurationSec)}`}
-      </Text>
+      <View style={styles.actionTopRow}>
+        <ActionIconTile source={actionIconFor(action.name)} size={52} />
+        <View style={styles.actionInfo}>
+          <Text style={styles.name} maxFontSizeMultiplier={1.5}>
+            {action.name}
+          </Text>
+          <Text style={styles.meta} maxFontSizeMultiplier={1.5}>
+            {`${action.sideMode === 'bilateral' ? '左右配对' : '单侧'} · 默认 ${formatDuration(action.defaultDurationSec)}`}
+          </Text>
+        </View>
+      </View>
       <View style={styles.row}>
         <AppButton
           label="编辑"
@@ -291,6 +298,14 @@ export function ActionLibraryScreen() {
 }
 
 const styles = StyleSheet.create({
+  actionTopRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  actionInfo: {
+    flex: 1,
+  },
   name: {
     fontSize: 17,
     fontWeight: '700',

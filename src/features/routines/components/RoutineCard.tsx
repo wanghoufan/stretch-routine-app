@@ -3,6 +3,8 @@ import type { RoutineSummary } from '../../../domain/routine/Routine';
 import { formatDuration } from '../../../shared/utils/format';
 import { colors, radius, spacing } from '../../../shared/theme';
 import { AppButton } from '../../../shared/components/AppButton';
+import { ActionIconTile } from '../../../shared/components/ActionIconTile';
+import { sceneIconFor } from '../../../shared/assets/actionIcons';
 
 /**
  * Home routine card (T036): step count, estimated duration, and the primary
@@ -15,6 +17,7 @@ export function RoutineCard({
   onOpen,
   onStart,
   badge,
+  scene,
 }: {
   summary: RoutineSummary;
   hasActiveSession: boolean;
@@ -22,12 +25,16 @@ export function RoutineCard({
   onStart: () => void;
   /** Optional 角标, e.g. the 低/中/高 difficulty on 核心 templates (TASK-014). */
   badge?: string;
+  /** Scene group for the display-only icon tile (defaults to 全身拉伸). */
+  scene?: string;
 }) {
   const meta = `${summary.stepCount} 个动作 · 约 ${formatDuration(summary.totalDurationSec)}`;
 
   return (
     <View style={styles.card}>
-      <View style={styles.info}>
+      <View style={styles.topRow}>
+        <ActionIconTile source={sceneIconFor(scene ?? '')} size={64} />
+        <View style={styles.info}>
         <View style={styles.titleRow}>
           <Text style={styles.name} maxFontSizeMultiplier={1.5} accessibilityRole="header">
             {summary.name}
@@ -51,6 +58,7 @@ export function RoutineCard({
             上次还没结束
           </Text>
         ) : null}
+        </View>
       </View>
       <View style={styles.actions}>
         <AppButton
@@ -74,13 +82,19 @@ export function RoutineCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
+  topRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+  },
   info: {
+    flex: 1,
     marginBottom: spacing.md,
   },
   titleRow: {

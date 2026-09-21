@@ -6,6 +6,8 @@ import { formatClock, formatDuration } from '../../../shared/utils/format';
 import { Card } from '../../../shared/components/Layout';
 import { NoticeBanner } from '../../../shared/components/NoticeBanner';
 import { Screen } from '../../../shared/components/Screen';
+import { ActionIconTile } from '../../../shared/components/ActionIconTile';
+import { actionIconFor } from '../../../shared/assets/actionIcons';
 import { colors, fontSizes, radius, spacing } from '../../../shared/theme';
 import { RunnerControls } from '../components/RunnerControls';
 import { useRunner } from '../hooks/useRunner';
@@ -99,6 +101,7 @@ export function RunnerScreen() {
       ) : null}
 
       <Card style={styles.card}>
+        <ActionIconTile source={actionIconFor(headline)} size={96} style={styles.heroTile} />
         <Text style={styles.position} maxFontSizeMultiplier={1.5}>
           {`第 ${view.stepPosition} / ${view.stepCount} 个`}
         </Text>
@@ -173,6 +176,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xl,
     marginTop: spacing.sm,
+  },
+  heroTile: {
+    marginBottom: spacing.md,
   },
   position: {
     fontSize: fontSizes.meta,

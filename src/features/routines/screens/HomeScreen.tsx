@@ -144,6 +144,7 @@ export function HomeScreen() {
                   onOpen={() => openRoutine(summary.id)}
                   onStart={() => startRoutine(summary.id)}
                   badge={group.scene === '核心' ? summary.difficulty : undefined}
+                  scene={group.scene}
                 />
               ))}
             </View>

@@ -96,6 +96,8 @@ export function SettingsScreen() {
             onValueChange={(value) => {
               void update({ ttsEnabled: value });
             }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.text}
             accessibilityLabel="语音播报开关"
             testID="settings-tts-enabled"
           />
@@ -126,6 +128,8 @@ export function SettingsScreen() {
             onValueChange={(value) => {
               void update({ countdownWarningEnabled: value });
             }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.text}
             accessibilityLabel="倒计时提示开关"
             testID="settings-countdown-enabled"
           />
