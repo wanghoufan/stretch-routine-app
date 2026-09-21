@@ -30,6 +30,7 @@
 - permission_request：无
 - 收尾记一笔（neat-freak）：2026-09-19 大交接收尾——文档对齐完成（`PLAN-TASK-018-…md` 状态字段同步为「全链完成并放行」、qa 报告尾部追加收尾核对，首轮 OPEN 项已被复验 CLOSED 取代）；清理未跟踪系统垃圾 `.DS_Store`×5 与 `.expo/dev/logs` 临时日志×2（零业务/仓库文件改动，`git status` 与清理前一致）；账本只校验不改；未决已落位。**遗留待人工确认**：见「三、注意事项与规矩」的 U-1 / U-2 / U-3
 - 收尾记一笔（neat-freak）：2026-09-21 Motion Core V1 纯UI换皮收尾——分支 `visual-optimization` 合入 main：theme 深蓝 token＋共享组件＋7 页磁贴/配色＋App Icon（`assets/icons/motion-core/001..050`＋`motion-core-*`），零业务改动；tsc 干净＋258/258 全绿；xagapro/ruby/pearl 三台 release 包装机冷启动通过；APK 留 `releases/`（git 忽略），24MB 资源原包留磁盘、`.gitignore` 止其进仓；Metro 8095 已停。
+- 收尾记一笔：2026-09-21 App 图标修复——首版 release 包图标未变，根因为 `android/` 原生目录已存在、`expo run` 未重跑 prebuild（app.json 新图标未进 `res/`）；已 `expo prebuild --platform android`＋gradle 重编＋三台重装，抽屉图标确认为新图（深蓝底青色小人），冷启动正常；新 APK 已覆盖 `releases/stretch-routine-motioncore-v1-local.apk`。
 
 ---
 
