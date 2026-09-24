@@ -1,5 +1,10 @@
 import type { RoutineSummary } from '../../domain/routine/Routine';
-import { groupRoutines, sceneOfRoutine } from '../../features/routines/services/routineGroups';
+import {
+  categoryForGroupChoice,
+  groupChoiceForCategory,
+  groupRoutines,
+  sceneOfRoutine,
+} from '../../features/routines/services/routineGroups';
 
 function makeRoutine(
   overrides: Partial<RoutineSummary> & { name: string },
@@ -57,5 +62,28 @@ describe('流程模板场景分组 (TASK-014)', () => {
 
   it('没有匹配模板时不产生分组', () => {
     expect(groupRoutines([])).toEqual([]);
+  });
+
+  it('自定义分组名自成一组排在其他之前，无标签仍进其他', () => {
+    const routines = [
+      makeRoutine({ name: '我的睡前放松', category: ['睡前放松'] }),
+      makeRoutine({ name: '随便建的', category: [] }),
+      makeRoutine({ name: '晨起全身拉伸', category: ['晨起'] }),
+    ];
+
+    const groups = groupRoutines(routines);
+
+    expect(groups.map((group) => group.scene)).toEqual(['日常拉伸', '睡前放松', '其他']);
+    expect(groups.map((group) => group.count)).toEqual([1, 1, 1]);
+  });
+
+  it('分组选择与自定义名的存取映射', () => {
+    expect(categoryForGroupChoice('热身')).toBe('热身');
+    expect(categoryForGroupChoice('核心')).toBe('核心');
+    expect(groupChoiceForCategory(['热身'])).toBe('热身');
+    expect(groupChoiceForCategory(['晨起'])).toBe('日常拉伸');
+    expect(groupChoiceForCategory(['跑后'])).toBe('健身前后');
+    expect(groupChoiceForCategory(['睡前放松'])).toBeNull();
+    expect(groupChoiceForCategory([])).toBeNull();
   });
 });

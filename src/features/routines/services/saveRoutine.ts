@@ -18,6 +18,8 @@ export interface SaveRoutineDraft {
   name: string;
   defaultDurationSec: number;
   defaultTransitionSec: number;
+  /** Home group tag(s); empty means the 「其他」 fallback. */
+  category: string[];
   steps: readonly RoutineStepDraft[];
 }
 
@@ -63,6 +65,7 @@ export async function saveRoutine(
     name: draft.name,
     defaultDurationSec: draft.defaultDurationSec,
     defaultTransitionSec: draft.defaultTransitionSec,
+    category: draft.category,
     steps: toStepInputs(draft.steps),
   };
 

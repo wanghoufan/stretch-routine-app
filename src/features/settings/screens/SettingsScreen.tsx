@@ -3,6 +3,7 @@ import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useNavigation } from '../../../app/navigation/NavigationContext';
 import { useServices } from '../../../app/providers/ServicesContext';
 import { useSettings } from '../../../app/providers/SettingsContext';
+import { useSpeech } from '../../../app/providers/SpeechContext';
 import { clearSeededExamples } from '../../../data/seeds';
 import { AppButton } from '../../../shared/components/AppButton';
 import { Card, SectionTitle } from '../../../shared/components/Layout';
@@ -34,9 +35,30 @@ export function SettingsScreen() {
   const navigation = useNavigation();
   const services = useServices();
   const { settings, loading, update } = useSettings();
+  const { tts, ttsError, dismissTtsError } = useSpeech();
   const [clearing, setClearing] = useState(false);
   const [clearResult, setClearResult] = useState<string | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
+  const [speechTest, setSpeechTest] = useState<string | null>(null);
+
+  const runSpeechTest = useCallback(() => {
+    dismissTtsError();
+    if (!settings.ttsEnabled) {
+      setSpeechTest('请先打开上面的“语音播报”开关。');
+      return;
+    }
+    tts.resetSession();
+    const queued = tts.announce({
+      key: `speech-test:${Date.now()}`,
+      text: '语音播报测试，如果你听到这句话，说明播报正常',
+      interrupt: true,
+    });
+    setSpeechTest(
+      queued
+        ? '测试语音已发送。如果手机没出声，一般是系统文字转语音引擎缺中文语音包：去系统设置→更多设置→无障碍→文字转语音输出，换一个带中文的引擎并下载中文语音。'
+        : '测试语音被拦截（开关关闭或重复发送），稍后再试。',
+    );
+  }, [dismissTtsError, settings.ttsEnabled, tts]);
 
   const runClear = useCallback(async () => {
     setClearing(true);
@@ -118,6 +140,19 @@ export function SettingsScreen() {
           formatValue={(value) => `${value.toFixed(1)}x`}
           testID="settings-speech-rate"
         />
+
+        <AppButton
+          label="测试语音播报"
+          variant="secondary"
+          onPress={runSpeechTest}
+          accessibilityHint="朗读一句测试语音，检查手机是否出声"
+          testID="settings-speech-test"
+          style={styles.clearButton}
+        />
+        {speechTest ? <NoticeBanner title={speechTest} /> : null}
+        {ttsError ? (
+          <NoticeBanner tone="error" title="语音引擎报错" message={ttsError} />
+        ) : null}
 
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel} maxFontSizeMultiplier={1.5}>

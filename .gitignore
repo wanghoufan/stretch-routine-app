@@ -1,5 +1,8 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+# 迁移整理备份（.旧版-日期）：留磁盘不进仓
+*.旧版-*
+
 # dependencies
 node_modules/
 

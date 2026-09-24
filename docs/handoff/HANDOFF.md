@@ -163,3 +163,14 @@
   ⑪【合规补齐，来源=QA 真机 P3-1】chip 显式 `minWidth: MIN_TOUCH_SIZE`（真机实测单字 chip 由 42.5dp → 48.0×48.0dp）；
   ⑫DoD 追加：⑨⑩⑪ 三条须有集成测试覆盖，并在 xagapro / Expo Go 真机复验通过（已达成）。
 - 本地构建授权（2026-09-18 用户明确批准）：brew 安装 JDK17 + Android SDK（约 3GB），走本地构建（`expo run:android release` / `eas build --local`）出 APK，不耗 EAS 额度；用户要求下载 → 调试 → 推送手机。
+
+## 迁移整理（2026-09-23，整理工）
+- 模板包重铺：新放58、备份8、跳过23（含GOVERNANCE_VERSION一致）；AGENTS旧规已附新版末尾；USER_MODEL_OVERRIDE转软链（实文件备份.旧版-2026-09-13）
+- 归位表：docs/templates/归位表.md；GOVERNANCE_VERSION：版本以 Git 历史为准
+- 基线：typecheck PASS，jest 35/258 PASS，lint无配置不卡；两账本为真实账本已原样保留（模板覆盖后回退）
+- CHANGE_REQUEST：NONE（本次为治理整理，不碰业务）
+
+## 真机联调（2026-09-24）
+- Picker总数+分组筛选、Routine分组选择+自定义分组、设置页测试语音按钮三处改动，随release包真机验收通过（jest 36套件/263用例全绿）
+- 真机无声根因：speaker音量0＋sherpa引擎无中文包（切mibrain）＋投屏/录屏劫持remote_submix；均设备侧修复，无业务代码改动
+- 当前手机上为release包（离线独立运行）；CHANGE_REQUEST：NONE

@@ -27,6 +27,7 @@ export interface RoutineDraft {
   name: string;
   defaultDurationSec: number;
   defaultTransitionSec: number;
+  category: string[];
   steps: RoutineStepDraft[];
 }
 
@@ -42,6 +43,7 @@ export interface UseRoutineDraftResult {
   loading: boolean;
   error: string | null;
   setName: (name: string) => void;
+  setCategory: (category: string[]) => void;
   setDefaultDurationSec: (seconds: number) => void;
   setDefaultTransitionSec: (seconds: number) => void;
   /** Parses pasted lines and appends them as ordered steps. Returns added count. */
@@ -67,6 +69,7 @@ function createEmptyDraft(defaults: DraftDefaults): RoutineDraft {
     name: '',
     defaultDurationSec: clampDuration(defaults.defaultDurationSec),
     defaultTransitionSec: clampTransition(defaults.defaultTransitionSec),
+    category: [],
     steps: [],
   };
 }
@@ -77,6 +80,7 @@ function toDraft(routineId: string, loaded: RoutineWithSteps): RoutineDraft {
     name: loaded.routine.name,
     defaultDurationSec: loaded.routine.defaultDurationSec,
     defaultTransitionSec: loaded.routine.defaultTransitionSec,
+    category: [...(loaded.routine.category ?? [])],
     steps: loaded.steps.map((step) => ({
       id: step.id,
       sourceActionId: step.sourceActionId,
@@ -157,6 +161,10 @@ export function useRoutineDraft(options: {
 
   const setName = useCallback((name: string) => {
     setDraft((previous) => (previous ? { ...previous, name } : previous));
+  }, []);
+
+  const setCategory = useCallback((category: string[]) => {
+    setDraft((previous) => (previous ? { ...previous, category } : previous));
   }, []);
 
   const setDefaultDurationSec = useCallback((seconds: number) => {
@@ -317,6 +325,7 @@ export function useRoutineDraft(options: {
       name: draft.name,
       defaultDurationSec: draft.defaultDurationSec,
       defaultTransitionSec: draft.defaultTransitionSec,
+      category: draft.category,
       steps: draft.steps,
     });
     setDraft(toDraft(saved.routine.id, saved));
@@ -328,6 +337,7 @@ export function useRoutineDraft(options: {
     loading,
     error,
     setName,
+    setCategory,
     setDefaultDurationSec,
     setDefaultTransitionSec,
     addBatch,

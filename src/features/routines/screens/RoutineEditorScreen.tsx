@@ -106,9 +106,11 @@ export function RoutineEditorScreen() {
         name={draft.name}
         defaultDurationSec={draft.defaultDurationSec}
         defaultTransitionSec={draft.defaultTransitionSec}
+        category={draft.category}
         onChangeName={draftApi.setName}
         onChangeDefaultDuration={draftApi.setDefaultDurationSec}
         onChangeDefaultTransition={draftApi.setDefaultTransitionSec}
+        onChangeCategory={draftApi.setCategory}
       />
 
       <BatchActionInput onAdd={draftApi.addBatch} />
